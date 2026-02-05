@@ -49,7 +49,12 @@ export function SettingsPage() {
   };
 
   const handleLogout = async () => {
-    await logout();
+    try {
+      await logout();
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+    // Siempre navegar al login
     navigate('/login');
   };
 
