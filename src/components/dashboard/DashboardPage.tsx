@@ -14,6 +14,7 @@ import { useWorkoutStore } from '../../stores/workoutStore';
 import { useNutritionStore } from '../../stores/nutritionStore';
 import { useScheduleStore } from '../../stores/scheduleStore';
 import { StatCard } from '../ui/StatCard';
+import { WelcomeModal } from '../ui/WelcomeModal';
 import { generateWorkoutRecommendation } from '../../lib/openai';
 import type { AIRecommendation } from '../../types';
 
@@ -25,6 +26,16 @@ export function DashboardPage() {
   
   const [recommendation, setRecommendation] = useState<AIRecommendation | null>(null);
   const [loadingRec, setLoadingRec] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  // Verificar si es un usuario nuevo que debe ver el tutorial
+  useEffect(() => {
+    const shouldShowWelcome = localStorage.getItem('fitapp-show-welcome');
+    if (shouldShowWelcome === 'true') {
+      setShowWelcome(true);
+      localStorage.removeItem('fitapp-show-welcome');
+    }
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -354,6 +365,11 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de bienvenida para usuarios nuevos */}
+      {showWelcome && (
+        <WelcomeModal onClose={() => setShowWelcome(false)} />
+      )}
     </div>
   );
 }

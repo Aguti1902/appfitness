@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Brain, Dumbbell, Utensils, Calendar, CheckCircle, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../lib/supabase';
@@ -13,7 +12,6 @@ const PROCESSING_STEPS = [
 ];
 
 export function AIProcessingPage() {
-  const navigate = useNavigate();
   const { setUser } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -60,14 +58,16 @@ export function AIProcessingPage() {
         console.error('Error refreshing user data:', error);
       }
       
-      // Esperar un momento antes de redirigir
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 500);
+      // Marcar que es un usuario nuevo para mostrar el tutorial
+      localStorage.setItem('fitapp-show-welcome', 'true');
+      
+      // Redirigir al dashboard
+      console.log('Redirecting to dashboard...');
+      window.location.href = '/';
     };
 
     processSteps();
-  }, [navigate, setUser]);
+  }, [setUser]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 flex items-center justify-center p-4">
