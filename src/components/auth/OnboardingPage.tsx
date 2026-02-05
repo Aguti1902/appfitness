@@ -202,19 +202,18 @@ export function OnboardingPage() {
 
   const handleComplete = async () => {
     setIsLoading(true);
+    console.log('=== STARTING ONBOARDING COMPLETE ===');
 
     try {
-      // Obtener usuario de la sesión si no está en el store
-      let userId = user?.id;
-      if (!userId) {
-        const { data: { session } } = await supabase.auth.getSession();
-        userId = session?.user?.id;
-      }
+      // Obtener sesión
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = user?.id || session?.user?.id;
+      
+      console.log('User ID:', userId);
 
       if (!userId) {
-        console.error('No user found');
+        console.error('No user found - redirecting to login');
         navigate('/login');
-        setIsLoading(false);
         return;
       }
 
@@ -238,8 +237,8 @@ export function OnboardingPage() {
         workout_duration_preference: parseInt(workoutDuration),
         diet_type: dietType,
         allergies: allergies.length > 0 ? allergies : undefined,
-        food_dislikes: dislikedFoods ? dislikedFoods.split(',').map(f => f.trim()) : undefined,
-        favorite_foods: favoriteFoods ? favoriteFoods.split(',').map(f => f.trim()) : undefined,
+        food_dislikes: dislikedFoods ? dislikedFoods.split(',').map(f => f.trim()).filter(Boolean) : undefined,
+        favorite_foods: favoriteFoods ? favoriteFoods.split(',').map(f => f.trim()).filter(Boolean) : undefined,
         meals_per_day: parseInt(mealsPerDay),
         injuries: injuries.filter(i => i !== 'Ninguna').length > 0 
           ? injuries.filter(i => i !== 'Ninguna') 
@@ -248,8 +247,10 @@ export function OnboardingPage() {
         initial_photos: Object.keys(photos).length > 0 ? photos : undefined,
       };
 
-      // Guardar en Supabase
-      const { error } = await supabase
+      console.log('Saving profile data...');
+
+      // Guardar en Supabase con timeout
+      const updatePromise = supabase
         .from('profiles')
         .update({
           goals,
@@ -258,42 +259,43 @@ export function OnboardingPage() {
         })
         .eq('id', userId);
 
-      if (error) {
-        console.error('Error guardando perfil:', error);
-      } else {
-        console.log('Perfil guardado correctamente');
-      }
+      // Timeout de 10 segundos
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 10000)
+      );
 
-      // Actualizar estado local con todos los datos
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: updatedProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (updatedProfile) {
-          // Actualizar el store directamente con el usuario completo
-          const { setUser } = useAuthStore.getState();
-          setUser({
-            id: session.user.id,
-            email: session.user.email!,
-            name: updatedProfile.name || session.user.email!.split('@')[0],
-            avatar_url: updatedProfile.avatar_url,
-            goals: updatedProfile.goals,
-            training_types: updatedProfile.training_types,
-            profile_data: updatedProfile.profile_data,
-            created_at: session.user.created_at
-          });
-          console.log('Store actualizado con datos del perfil');
+      try {
+        const { error } = await Promise.race([updatePromise, timeoutPromise]) as any;
+        if (error) {
+          console.error('Error guardando perfil:', error);
+        } else {
+          console.log('Perfil guardado correctamente');
         }
+      } catch (e) {
+        console.error('Error o timeout guardando:', e);
       }
 
-      // Navegar a la página de procesamiento de IA
+      // Actualizar store local
+      const { setUser } = useAuthStore.getState();
+      setUser({
+        id: userId,
+        email: session?.user?.email || user?.email || '',
+        name: user?.name || session?.user?.user_metadata?.name || '',
+        avatar_url: user?.avatar_url,
+        goals,
+        training_types: trainingTypes,
+        profile_data: profileData,
+        created_at: user?.created_at || new Date().toISOString()
+      });
+
+      console.log('Navigating to AI processing...');
+      
+      // Navegar siempre, incluso si hubo error
       navigate('/ai-processing');
     } catch (error) {
       console.error('Error completando onboarding:', error);
+      // Navegar de todas formas para no dejar al usuario colgado
+      navigate('/ai-processing');
     } finally {
       setIsLoading(false);
     }
