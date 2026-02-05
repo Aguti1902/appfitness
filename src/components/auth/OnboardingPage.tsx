@@ -204,101 +204,103 @@ export function OnboardingPage() {
     setIsLoading(true);
     console.log('=== STARTING ONBOARDING COMPLETE ===');
 
-    try {
-      // Obtener sesión
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = user?.id || session?.user?.id;
-      
-      console.log('User ID:', userId);
+    // Preparar datos localmente primero
+    const goals: UserGoals = {
+      primary: goal,
+      current_weight: weight ? parseFloat(weight) : undefined,
+      target_weight: targetWeight ? parseFloat(targetWeight) : undefined,
+      height: height ? parseFloat(height) : undefined,
+      age: age ? parseInt(age) : undefined,
+      activity_level: activityLevel,
+    };
 
-      if (!userId) {
-        console.error('No user found - redirecting to login');
-        navigate('/login');
-        return;
-      }
+    const profileData: UserProfileData = {
+      gender,
+      work_schedule: {
+        start_time: workStartTime,
+        end_time: workEndTime,
+        days: workDays,
+      },
+      preferred_workout_time: preferredWorkoutTime,
+      workout_duration_preference: parseInt(workoutDuration),
+      diet_type: dietType,
+      allergies: allergies.length > 0 ? allergies : undefined,
+      food_dislikes: dislikedFoods ? dislikedFoods.split(',').map(f => f.trim()).filter(Boolean) : undefined,
+      favorite_foods: favoriteFoods ? favoriteFoods.split(',').map(f => f.trim()).filter(Boolean) : undefined,
+      meals_per_day: parseInt(mealsPerDay),
+      injuries: injuries.filter(i => i !== 'Ninguna').length > 0 
+        ? injuries.filter(i => i !== 'Ninguna') 
+        : undefined,
+      fitness_experience: fitnessExperience,
+      initial_photos: Object.keys(photos).length > 0 ? photos : undefined,
+    };
 
-      const goals: UserGoals = {
-        primary: goal,
-        current_weight: weight ? parseFloat(weight) : undefined,
-        target_weight: targetWeight ? parseFloat(targetWeight) : undefined,
-        height: height ? parseFloat(height) : undefined,
-        age: age ? parseInt(age) : undefined,
-        activity_level: activityLevel,
-      };
+    console.log('Goals:', goals);
+    console.log('Profile data prepared');
 
-      const profileData: UserProfileData = {
-        gender,
-        work_schedule: {
-          start_time: workStartTime,
-          end_time: workEndTime,
-          days: workDays,
-        },
-        preferred_workout_time: preferredWorkoutTime,
-        workout_duration_preference: parseInt(workoutDuration),
-        diet_type: dietType,
-        allergies: allergies.length > 0 ? allergies : undefined,
-        food_dislikes: dislikedFoods ? dislikedFoods.split(',').map(f => f.trim()).filter(Boolean) : undefined,
-        favorite_foods: favoriteFoods ? favoriteFoods.split(',').map(f => f.trim()).filter(Boolean) : undefined,
-        meals_per_day: parseInt(mealsPerDay),
-        injuries: injuries.filter(i => i !== 'Ninguna').length > 0 
-          ? injuries.filter(i => i !== 'Ninguna') 
-          : undefined,
-        fitness_experience: fitnessExperience,
-        initial_photos: Object.keys(photos).length > 0 ? photos : undefined,
-      };
-
-      console.log('Saving profile data...');
-
-      // Guardar en Supabase con timeout
-      const updatePromise = supabase
-        .from('profiles')
-        .update({
-          goals,
-          training_types: trainingTypes,
-          profile_data: profileData,
-        })
-        .eq('id', userId);
-
-      // Timeout de 10 segundos
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 10000)
-      );
-
+    // Intentar obtener userId
+    let userId = user?.id;
+    
+    if (!userId) {
+      console.log('No user in store, checking session...');
       try {
-        const { error } = await Promise.race([updatePromise, timeoutPromise]) as any;
+        const { data } = await supabase.auth.getSession();
+        userId = data?.session?.user?.id;
+        console.log('Session user ID:', userId);
+      } catch (e) {
+        console.error('Error getting session:', e);
+      }
+    }
+
+    // Guardar en Supabase si tenemos userId
+    if (userId) {
+      console.log('Saving to Supabase for user:', userId);
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            goals,
+            training_types: trainingTypes,
+            profile_data: profileData,
+          })
+          .eq('id', userId);
+
         if (error) {
-          console.error('Error guardando perfil:', error);
+          console.error('Supabase error:', error.message);
         } else {
-          console.log('Perfil guardado correctamente');
+          console.log('Saved to Supabase successfully');
         }
       } catch (e) {
-        console.error('Error o timeout guardando:', e);
+        console.error('Error saving to Supabase:', e);
       }
+    } else {
+      console.warn('No userId - skipping Supabase save');
+    }
 
-      // Actualizar store local
+    // Actualizar store local
+    console.log('Updating local store...');
+    try {
       const { setUser } = useAuthStore.getState();
+      const currentUser = useAuthStore.getState().user;
       setUser({
-        id: userId,
-        email: session?.user?.email || user?.email || '',
-        name: user?.name || session?.user?.user_metadata?.name || '',
-        avatar_url: user?.avatar_url,
+        id: userId || currentUser?.id || 'temp-id',
+        email: currentUser?.email || '',
+        name: currentUser?.name || '',
+        avatar_url: currentUser?.avatar_url,
         goals,
         training_types: trainingTypes,
         profile_data: profileData,
-        created_at: user?.created_at || new Date().toISOString()
+        created_at: currentUser?.created_at || new Date().toISOString()
       });
-
-      console.log('Navigating to AI processing...');
-      
-      // Navegar siempre, incluso si hubo error
-      navigate('/ai-processing');
-    } catch (error) {
-      console.error('Error completando onboarding:', error);
-      // Navegar de todas formas para no dejar al usuario colgado
-      navigate('/ai-processing');
-    } finally {
-      setIsLoading(false);
+      console.log('Store updated');
+    } catch (e) {
+      console.error('Error updating store:', e);
     }
+
+    // SIEMPRE navegar
+    console.log('Navigating to /ai-processing...');
+    setIsLoading(false);
+    navigate('/ai-processing');
   };
 
   const totalSteps = 7;
