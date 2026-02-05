@@ -24,7 +24,7 @@ const FUN_FACTS = [
 ];
 
 export function AIProcessingPage() {
-  const { setUser, user } = useAuthStore();
+  const { setUser } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [currentFact, setCurrentFact] = useState(0);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Dumbbell, Utensils, Calendar, Target, ChevronRight, Sparkles, ShoppingCart, ChevronLeft } from 'lucide-react';
+import { X, Dumbbell, Utensils, Target, ChevronRight, Sparkles, ShoppingCart, ChevronLeft } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import type { GeneratedPlan } from '../../types';
 
