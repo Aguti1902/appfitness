@@ -10,14 +10,12 @@ import {
   Save,
   Check
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { requestNotificationPermission } from '../../lib/notifications';
 import type { UserGoals, TrainingType } from '../../types';
 
 export function SettingsPage() {
   const { user, updateProfile, updateGoals, updateTrainingTypes, logout } = useAuthStore();
-  const navigate = useNavigate();
   
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);

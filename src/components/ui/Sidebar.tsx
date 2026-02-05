@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { 
   Home, 
   Dumbbell, 
@@ -28,7 +28,6 @@ const navItems = [
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuthStore();
-  const navigate = useNavigate();
 
   const handleLogout = async () => {
     console.log('Logout button clicked');
