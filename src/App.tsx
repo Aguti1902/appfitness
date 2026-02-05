@@ -29,6 +29,14 @@ function AppContent() {
   useEffect(() => {
     let mounted = true;
     console.log('=== APP INIT ===');
+
+    // Timeout de seguridad - máximo 5 segundos de loading
+    const timeout = setTimeout(() => {
+      if (mounted && initialLoading) {
+        console.log('Loading timeout - forcing completion');
+        setInitialLoading(false);
+      }
+    }, 5000);
     
     // Función auxiliar para cargar datos del usuario
     const loadUserData = async (sessionUser: any): Promise<any> => {
@@ -40,7 +48,6 @@ function AppContent() {
           .maybeSingle();
 
         if (!profile) {
-          // Crear perfil si no existe
           await supabase.from('profiles').upsert({
             id: sessionUser.id,
             email: sessionUser.email,
@@ -65,11 +72,10 @@ function AppContent() {
       }
     };
 
-    // Obtener sesión inicial
-    const getInitialSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('Initial session:', session?.user?.email, 'Error:', error?.message);
+    // Escuchar cambios de auth (esto se dispara inmediatamente con INITIAL_SESSION)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, 'User:', session?.user?.email);
         
         if (!mounted) return;
 
@@ -81,41 +87,16 @@ function AppContent() {
         } else {
           if (mounted) setUser(null);
         }
-      } catch (error) {
-        console.error('Error getting initial session:', error);
-        if (mounted) setUser(null);
-      } finally {
-        if (mounted) setInitialLoading(false);
-      }
-    };
 
-    // Siempre verificar la sesión inicial
-    getInitialSession();
+        // Terminar loading después del primer evento
+        if (mounted) {
+          setInitialLoading(false);
+        }
 
-    // Escuchar cambios de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event, 'User:', session?.user?.email);
-        
-        if (!mounted) return;
-
+        // Redirigir al onboarding si viene de OAuth
         if (event === 'SIGNED_IN' && session?.user) {
-          const userData = await loadUserData(session.user);
-          if (mounted && userData) {
-            setUser(userData);
-          }
-
-          // Redirigir al onboarding si viene de OAuth
           if (window.location.hash.includes('access_token') || window.location.pathname === '/auth/callback') {
             window.location.href = '/onboarding';
-          }
-        } else if (event === 'SIGNED_OUT') {
-          if (mounted) setUser(null);
-        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          // Refrescar datos del usuario cuando se renueva el token
-          const userData = await loadUserData(session.user);
-          if (mounted && userData) {
-            setUser(userData);
           }
         }
       }
@@ -123,6 +104,7 @@ function AppContent() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, [setUser]);
