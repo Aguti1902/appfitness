@@ -23,6 +23,16 @@ const FUN_FACTS = [
   '🧠 El ejercicio mejora la memoria y concentración',
 ];
 
+// Timeout helper
+const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout')), ms)
+    )
+  ]);
+};
+
 export function AIProcessingPage() {
   const { setUser } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
@@ -32,7 +42,6 @@ export function AIProcessingPage() {
   const processingRef = useRef(false);
 
   useEffect(() => {
-    // Rotar facts cada 4 segundos
     const factInterval = setInterval(() => {
       setCurrentFact(prev => (prev + 1) % FUN_FACTS.length);
     }, 4000);
@@ -46,91 +55,109 @@ export function AIProcessingPage() {
     const processAndGeneratePlan = async () => {
       console.log('=== AI PROCESSING START ===');
       
+      let session: any = null;
+      let profile: any = null;
+      
+      // Paso 1: Obtener sesión y perfil (con timeout de 5s)
+      setCurrentStep(0);
+      
       try {
-        // Paso 1: Analizar perfil - Obtener datos del usuario
-        setCurrentStep(0);
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        console.log('Getting session...');
+        const sessionResult = await withTimeout(supabase.auth.getSession(), 5000);
+        session = sessionResult.data?.session;
+        console.log('Session:', session ? 'found' : 'not found');
         
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session?.user) {
-          console.error('No session found');
-          setError('Sesión no encontrada. Redirigiendo...');
-          setTimeout(() => window.location.href = '/login', 2000);
-          return;
+        if (session?.user) {
+          console.log('Getting profile...');
+          const profileResult = await withTimeout(
+            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+            5000
+          );
+          profile = profileResult.data;
+          console.log('Profile:', profile ? 'found' : 'not found');
         }
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        console.log('Profile loaded:', profile);
-        
-        const goals: UserGoals = profile?.goals || { primary: 'maintain', activity_level: 'moderate' };
-        const trainingTypes: TrainingType[] = profile?.training_types || ['gym'];
-        const profileData: UserProfileData | undefined = profile?.profile_data;
-        
-        setCompletedSteps(prev => [...prev, 0]);
-        
-        // Paso 2-5: Generar plan completo con IA
-        setCurrentStep(1);
-        console.log('Generating complete plan...');
-        
-        let generatedPlan: GeneratedPlan;
-        
+      } catch (err) {
+        console.warn('Error getting session/profile:', err);
+      }
+      
+      // Marcar paso 1 como completado
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setCompletedSteps(prev => [...prev, 0]);
+      
+      // Datos por defecto si no hay perfil
+      const goals: UserGoals = profile?.goals || { primary: 'maintain', activity_level: 'moderate' };
+      const trainingTypes: TrainingType[] = profile?.training_types || ['gym'];
+      const profileData: UserProfileData | undefined = profile?.profile_data;
+      
+      // Paso 2-4: Generar plan
+      setCurrentStep(1);
+      
+      let generatedPlan: GeneratedPlan;
+      
+      try {
+        console.log('Generating plan...');
+        generatedPlan = await withTimeout(
+          generateCompletePlan(goals, trainingTypes, profileData),
+          15000 // 15 segundos máximo
+        );
+        console.log('Plan generated successfully');
+      } catch (genError) {
+        console.warn('Error/timeout generating plan, using default:', genError);
+        // Plan de demo
+        generatedPlan = {
+          workout_plan: { 
+            name: 'Plan de Entrenamiento', 
+            description: 'Plan personalizado para ti',
+            days: [], 
+            rest_days: [0, 3], 
+            estimated_calories_burned_weekly: 2500 
+          },
+          diet_plan: { 
+            name: 'Plan Nutricional', 
+            description: '2000 kcal diarias',
+            daily_calories: 2000, 
+            macros: { protein_grams: 150, carbs_grams: 200, fat_grams: 70 }, 
+            days: [] 
+          },
+          shopping_list: [],
+          recommendations: [
+            'Entrena con consistencia para ver resultados',
+            'Mantente hidratado bebiendo 2-3L de agua al día',
+            'Descansa al menos 7-8 horas'
+          ],
+          generated_at: new Date().toISOString()
+        };
+      }
+      
+      // Animar pasos restantes rápidamente
+      for (let i = 1; i < PROCESSING_STEPS.length - 1; i++) {
+        setCurrentStep(i);
+        await new Promise(resolve => setTimeout(resolve, 600));
+        setCompletedSteps(prev => [...prev, i]);
+      }
+      
+      // Paso final
+      setCurrentStep(PROCESSING_STEPS.length - 1);
+      
+      // Guardar en localStorage (siempre funciona)
+      localStorage.setItem('fitapp-generated-plan', JSON.stringify(generatedPlan));
+      
+      // Intentar guardar en Supabase (no bloquear si falla)
+      if (session?.user) {
         try {
-          // Generar el plan (esto puede tomar tiempo si usa OpenAI real)
-          generatedPlan = await generateCompletePlan(goals, trainingTypes, profileData);
-          console.log('Plan generated:', generatedPlan);
-        } catch (genError) {
-          console.error('Error generating plan:', genError);
-          // Continuar con plan vacío si falla
-          generatedPlan = {
-            workout_plan: { name: 'Plan básico', description: '', days: [], rest_days: [], estimated_calories_burned_weekly: 0 },
-            diet_plan: { name: 'Plan básico', description: '', daily_calories: 2000, macros: { protein_grams: 150, carbs_grams: 200, fat_grams: 70 }, days: [] },
-            shopping_list: [],
-            recommendations: ['Consulta con un profesional para un plan más detallado.'],
-            generated_at: new Date().toISOString()
-          };
-        }
-        
-        // Animar los pasos de generación
-        for (let i = 1; i < PROCESSING_STEPS.length - 1; i++) {
-          setCurrentStep(i);
-          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
-          setCompletedSteps(prev => [...prev, i]);
-        }
-        
-        // Paso final: Guardar plan en Supabase
-        setCurrentStep(PROCESSING_STEPS.length - 1);
-        
-        console.log('Saving plan to Supabase...');
-        
-        try {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
+          await withTimeout(
+            supabase.from('profiles').update({
               generated_plan: generatedPlan,
               plan_generated_at: new Date().toISOString()
-            })
-            .eq('id', session.user.id);
-          
-          if (updateError) {
-            console.warn('Error saving plan:', updateError);
-            // El plan se guardará en localStorage como fallback
-          }
-        } catch (saveError) {
-          console.warn('Error saving plan to DB:', saveError);
+            }).eq('id', session.user.id),
+            3000
+          );
+          console.log('Plan saved to Supabase');
+        } catch (saveErr) {
+          console.warn('Could not save to Supabase:', saveErr);
         }
         
-        // Guardar plan en localStorage como backup
-        localStorage.setItem('fitapp-generated-plan', JSON.stringify(generatedPlan));
-        
-        setCompletedSteps(prev => [...prev, PROCESSING_STEPS.length - 1]);
-        
-        // Actualizar el store con todos los datos
+        // Actualizar store
         setUser({
           id: session.user.id,
           email: session.user.email!,
@@ -141,31 +168,33 @@ export function AIProcessingPage() {
           profile_data: profileData,
           created_at: session.user.created_at
         });
-        
-        console.log('Processing complete, redirecting...');
-        
-        // Esperar un momento para mostrar completado
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Marcar que es un usuario nuevo para mostrar el tutorial
-        localStorage.setItem('fitapp-show-welcome', 'true');
-        
-        // Redirigir al dashboard
-        window.location.href = '/';
-        
-      } catch (err) {
-        console.error('Processing error:', err);
-        setError('Hubo un error. Redirigiendo al dashboard...');
-        
-        // Aún así redirigir después de unos segundos
-        setTimeout(() => {
-          localStorage.setItem('fitapp-show-welcome', 'true');
-          window.location.href = '/';
-        }, 2000);
       }
+      
+      setCompletedSteps(prev => [...prev, PROCESSING_STEPS.length - 1]);
+      
+      console.log('Processing complete!');
+      
+      // Esperar un momento y redirigir
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      localStorage.setItem('fitapp-show-welcome', 'true');
+      window.location.href = '/';
     };
 
-    processAndGeneratePlan();
+    // Ejecutar con un timeout global de seguridad
+    processAndGeneratePlan().catch(err => {
+      console.error('Fatal error:', err);
+      setError('Error en el procesamiento');
+    });
+    
+    // Timeout de seguridad: si después de 30s no ha terminado, redirigir
+    const safetyTimeout = setTimeout(() => {
+      console.log('Safety timeout reached, redirecting...');
+      localStorage.setItem('fitapp-show-welcome', 'true');
+      window.location.href = '/';
+    }, 30000);
+    
+    return () => clearTimeout(safetyTimeout);
   }, [setUser]);
 
   return (
@@ -251,7 +280,7 @@ export function AIProcessingPage() {
           </p>
         </div>
 
-        {/* Fun fact - rotating */}
+        {/* Fun fact */}
         <div className="mt-8 text-center min-h-[60px] flex items-center justify-center">
           <p className="text-white/70 text-sm px-4 transition-opacity duration-500">
             {FUN_FACTS[currentFact]}
