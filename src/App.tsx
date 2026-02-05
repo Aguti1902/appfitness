@@ -1,0 +1,184 @@
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuthStore } from './stores/authStore';
+import { supabase } from './lib/supabase';
+
+// Auth components
+import { LoginPage } from './components/auth/LoginPage';
+import { RegisterPage } from './components/auth/RegisterPage';
+import { OnboardingPage } from './components/auth/OnboardingPage';
+import { AIProcessingPage } from './components/auth/AIProcessingPage';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+
+// Main components
+import { DashboardPage } from './components/dashboard/DashboardPage';
+import { WorkoutsPage } from './components/workouts/WorkoutsPage';
+import { NewWorkoutPage } from './components/workouts/NewWorkoutPage';
+import { WorkoutDetailPage } from './components/workouts/WorkoutDetailPage';
+import { NutritionPage } from './components/nutrition/NutritionPage';
+import { ProgressPage } from './components/progress/ProgressPage';
+import { SocialPage } from './components/social/SocialPage';
+import { SchedulePage } from './components/schedule/SchedulePage';
+import { AICoachPage } from './components/ai/AICoachPage';
+import { SettingsPage } from './components/settings/SettingsPage';
+
+function AppContent() {
+  const { isAuthenticated, setUser } = useAuthStore();
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    console.log('=== APP INIT ===');
+    
+    // Función auxiliar para cargar datos del usuario
+    const loadUserData = async (sessionUser: any): Promise<any> => {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', sessionUser.id)
+          .maybeSingle();
+
+        if (!profile) {
+          // Crear perfil si no existe
+          await supabase.from('profiles').upsert({
+            id: sessionUser.id,
+            email: sessionUser.email,
+            name: sessionUser.user_metadata?.name || sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0],
+            avatar_url: sessionUser.user_metadata?.avatar_url || sessionUser.user_metadata?.picture
+          }, { onConflict: 'id' });
+        }
+
+        return {
+          id: sessionUser.id,
+          email: sessionUser.email!,
+          name: profile?.name || sessionUser.user_metadata?.name || sessionUser.email!.split('@')[0],
+          avatar_url: profile?.avatar_url || sessionUser.user_metadata?.avatar_url,
+          goals: profile?.goals || { primary: 'maintain', activity_level: 'moderate' },
+          training_types: profile?.training_types || [],
+          profile_data: profile?.profile_data,
+          created_at: sessionUser.created_at
+        };
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        return null;
+      }
+    };
+
+    // Obtener sesión inicial
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('Initial session:', session?.user?.email, 'Error:', error?.message);
+        
+        if (!mounted) return;
+
+        if (session?.user) {
+          const userData = await loadUserData(session.user);
+          if (mounted && userData) {
+            setUser(userData);
+          }
+        } else {
+          if (mounted) setUser(null);
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error);
+        if (mounted) setUser(null);
+      } finally {
+        if (mounted) setInitialLoading(false);
+      }
+    };
+
+    // Siempre verificar la sesión inicial
+    getInitialSession();
+
+    // Escuchar cambios de auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, 'User:', session?.user?.email);
+        
+        if (!mounted) return;
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          const userData = await loadUserData(session.user);
+          if (mounted && userData) {
+            setUser(userData);
+          }
+
+          // Redirigir al onboarding si viene de OAuth
+          if (window.location.hash.includes('access_token') || window.location.pathname === '/auth/callback') {
+            window.location.href = '/onboarding';
+          }
+        } else if (event === 'SIGNED_OUT') {
+          if (mounted) setUser(null);
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Refrescar datos del usuario cuando se renueva el token
+          const userData = await loadUserData(session.user);
+          if (mounted && userData) {
+            setUser(userData);
+          }
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [setUser]);
+
+  console.log('Render - InitialLoading:', initialLoading, 'Auth:', isAuthenticated);
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando FitApp...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={
+        isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
+      } />
+      <Route path="/register" element={
+        isAuthenticated ? <Navigate to="/onboarding" replace /> : <RegisterPage />
+      } />
+      <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route path="/ai-processing" element={<AIProcessingPage />} />
+      <Route path="/auth/callback" element={<OnboardingPage />} />
+
+      {/* Protected routes */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/workouts" element={<WorkoutsPage />} />
+        <Route path="/workouts/new" element={<NewWorkoutPage />} />
+        <Route path="/workouts/:id" element={<WorkoutDetailPage />} />
+        <Route path="/nutrition" element={<NutritionPage />} />
+        <Route path="/progress" element={<ProgressPage />} />
+        <Route path="/social" element={<SocialPage />} />
+        <Route path="/schedule" element={<SchedulePage />} />
+        <Route path="/ai-coach" element={<AICoachPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  );
+}
+
+export default App;
