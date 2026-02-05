@@ -252,10 +252,11 @@ export function OnboardingPage() {
       }
     }
 
-    // Guardar en Supabase si tenemos userId
+    // Guardar en Supabase si tenemos userId (con timeout de 5 segundos)
     if (userId) {
       console.log('Saving to Supabase for user:', userId);
-      try {
+      
+      const saveToSupabase = async () => {
         const { error } = await supabase
           .from('profiles')
           .update({
@@ -264,9 +265,19 @@ export function OnboardingPage() {
             profile_data: profileData,
           })
           .eq('id', userId);
+        return error;
+      };
 
-        if (error) {
-          console.error('Supabase error:', error.message);
+      const timeoutPromise = new Promise<string>((resolve) => 
+        setTimeout(() => resolve('TIMEOUT'), 5000)
+      );
+
+      try {
+        const result = await Promise.race([saveToSupabase(), timeoutPromise]);
+        if (result === 'TIMEOUT') {
+          console.warn('Supabase save timed out after 5s - continuing anyway');
+        } else if (result) {
+          console.error('Supabase error:', result);
         } else {
           console.log('Saved to Supabase successfully');
         }
