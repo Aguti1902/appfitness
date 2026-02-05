@@ -257,3 +257,85 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
 }
+
+// Plan completo generado por IA
+export interface GeneratedPlan {
+  workout_plan: WeeklyWorkoutPlan;
+  diet_plan: WeeklyDietPlan;
+  shopping_list: ShoppingListItem[];
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface WeeklyWorkoutPlan {
+  name: string;
+  description: string;
+  days: DayWorkout[];
+  rest_days: number[]; // 0-6
+  estimated_calories_burned_weekly: number;
+}
+
+export interface DayWorkout {
+  day: number; // 0-6 (domingo a sábado)
+  day_name: string;
+  workout_type: TrainingType;
+  title: string;
+  duration_minutes: number;
+  exercises: PlannedExercise[];
+  notes?: string;
+  is_rest_day: boolean;
+}
+
+export interface PlannedExercise {
+  name: string;
+  sets: number;
+  reps?: string; // "8-10" o "12"
+  weight_recommendation?: string; // "70% RM" o "20kg"
+  rest_seconds: number;
+  notes?: string;
+  alternatives?: string[];
+}
+
+export interface WeeklyDietPlan {
+  name: string;
+  description: string;
+  daily_calories: number;
+  macros: {
+    protein_grams: number;
+    carbs_grams: number;
+    fat_grams: number;
+  };
+  days: DayMeals[];
+}
+
+export interface DayMeals {
+  day: number;
+  day_name: string;
+  meals: PlannedMeal[];
+  total_calories: number;
+}
+
+export interface PlannedMeal {
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre_workout' | 'post_workout';
+  name: string;
+  time_suggestion: string;
+  foods: PlannedFood[];
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  recipe?: {
+    ingredients: string[];
+    instructions: string[];
+    prep_time: number;
+  };
+}
+
+export interface PlannedFood {
+  name: string;
+  quantity: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}

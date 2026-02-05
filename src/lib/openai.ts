@@ -1,5 +1,17 @@
 import OpenAI from 'openai';
-import type { UserGoals, TrainingType, Recipe, AIRecommendation, DietPlan } from '../types';
+import type { 
+  UserGoals, 
+  TrainingType, 
+  Recipe, 
+  AIRecommendation, 
+  DietPlan,
+  UserProfileData,
+  GeneratedPlan,
+  WeeklyWorkoutPlan,
+  WeeklyDietPlan,
+  ShoppingListItem,
+  PlannedExercise
+} from '../types';
 
 const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
 
@@ -237,6 +249,547 @@ export async function chatWithAI(
     console.error('Error in chat:', error);
     return getDemoChatResponse(message);
   }
+}
+
+// Función principal para generar plan completo personalizado
+export async function generateCompletePlan(
+  goals: UserGoals,
+  trainingTypes: TrainingType[],
+  profileData?: UserProfileData
+): Promise<GeneratedPlan> {
+  console.log('=== GENERATING COMPLETE PLAN ===');
+  console.log('Goals:', goals);
+  console.log('Training types:', trainingTypes);
+  console.log('Profile data:', profileData);
+
+  const dailyCalories = goals.daily_calories || calculateTDEE(goals);
+  
+  // Si no hay API key, usar datos de demo
+  if (DEMO_MODE) {
+    console.log('Using demo mode for plan generation');
+    return generateDemoPlan(goals, trainingTypes, profileData, dailyCalories);
+  }
+
+  try {
+    // Generar el plan con OpenAI
+    const workoutPlan = await generateWeeklyWorkoutPlan(goals, trainingTypes, profileData);
+    const dietPlan = await generateWeeklyDietPlan(goals, profileData, dailyCalories);
+    const shoppingList = await generateWeeklyShoppingList(dietPlan);
+    
+    const plan: GeneratedPlan = {
+      workout_plan: workoutPlan,
+      diet_plan: dietPlan,
+      shopping_list: shoppingList,
+      recommendations: generatePersonalizedTips(goals, profileData),
+      generated_at: new Date().toISOString()
+    };
+    
+    console.log('Plan generated successfully');
+    return plan;
+  } catch (error) {
+    console.error('Error generating complete plan:', error);
+    return generateDemoPlan(goals, trainingTypes, profileData, dailyCalories);
+  }
+}
+
+async function generateWeeklyWorkoutPlan(
+  goals: UserGoals,
+  trainingTypes: TrainingType[],
+  profileData?: UserProfileData
+): Promise<WeeklyWorkoutPlan> {
+  const prompt = `Genera un plan de entrenamiento semanal completo y personalizado.
+
+DATOS DEL USUARIO:
+- Objetivo: ${getGoalText(goals.primary)}
+- Peso actual: ${goals.current_weight || 70} kg
+- Peso objetivo: ${goals.target_weight || goals.current_weight || 70} kg
+- Altura: ${goals.height || 170} cm
+- Edad: ${goals.age || 30} años
+- Nivel de actividad: ${goals.activity_level}
+- Deportes que practica: ${trainingTypes.join(', ') || 'gimnasio'}
+- Experiencia: ${profileData?.fitness_experience || 'intermediate'}
+- Horario preferido: ${profileData?.preferred_workout_time || 'flexible'}
+- Duración preferida: ${profileData?.workout_duration_preference || 60} minutos
+- Lesiones/limitaciones: ${profileData?.injuries?.join(', ') || 'ninguna'}
+
+Responde en JSON con esta estructura:
+{
+  "name": "Nombre del plan",
+  "description": "Descripción breve",
+  "days": [
+    {
+      "day": 0,
+      "day_name": "Domingo",
+      "workout_type": "gym",
+      "title": "Título del entreno",
+      "duration_minutes": 60,
+      "is_rest_day": false,
+      "exercises": [
+        {
+          "name": "Nombre ejercicio",
+          "sets": 4,
+          "reps": "8-10",
+          "weight_recommendation": "70% RM",
+          "rest_seconds": 90,
+          "notes": "Notas opcionales",
+          "alternatives": ["alternativa1", "alternativa2"]
+        }
+      ],
+      "notes": "Notas del día"
+    }
+  ],
+  "rest_days": [0, 3],
+  "estimated_calories_burned_weekly": 2500
+}
+
+Incluye los 7 días de la semana. Para los días de descanso, pon is_rest_day: true y exercises vacío.
+Adapta los ejercicios a las lesiones mencionadas.`;
+
+  try {
+    const response = await openai!.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres un entrenador personal profesional con años de experiencia. Creas planes de entrenamiento detallados y personalizados en español.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    return result as WeeklyWorkoutPlan;
+  } catch (error) {
+    console.error('Error generating workout plan:', error);
+    throw error;
+  }
+}
+
+async function generateWeeklyDietPlan(
+  goals: UserGoals,
+  profileData?: UserProfileData,
+  dailyCalories?: number
+): Promise<WeeklyDietPlan> {
+  const calories = dailyCalories || calculateTDEE(goals);
+  const protein = Math.round((calories * 0.3) / 4); // 30% proteína
+  const carbs = Math.round((calories * 0.4) / 4); // 40% carbos
+  const fat = Math.round((calories * 0.3) / 9); // 30% grasas
+
+  const prompt = `Genera un plan de alimentación semanal completo y personalizado.
+
+DATOS DEL USUARIO:
+- Objetivo: ${getGoalText(goals.primary)}
+- Calorías diarias objetivo: ${calories} kcal
+- Macros objetivo: ${protein}g proteína, ${carbs}g carbos, ${fat}g grasas
+- Tipo de dieta: ${profileData?.diet_type || 'omnívora'}
+- Alergias: ${profileData?.allergies?.join(', ') || 'ninguna'}
+- Comidas que no le gustan: ${profileData?.food_dislikes?.join(', ') || 'ninguna'}
+- Comidas favoritas: ${profileData?.favorite_foods?.join(', ') || 'no especificado'}
+- Comidas al día: ${profileData?.meals_per_day || 4}
+- Horario de trabajo: ${profileData?.work_schedule ? `${profileData.work_schedule.start_time} - ${profileData.work_schedule.end_time}` : 'flexible'}
+
+Responde en JSON con esta estructura:
+{
+  "name": "Nombre del plan",
+  "description": "Descripción breve",
+  "daily_calories": ${calories},
+  "macros": {
+    "protein_grams": ${protein},
+    "carbs_grams": ${carbs},
+    "fat_grams": ${fat}
+  },
+  "days": [
+    {
+      "day": 0,
+      "day_name": "Domingo",
+      "meals": [
+        {
+          "meal_type": "breakfast",
+          "name": "Nombre de la comida",
+          "time_suggestion": "08:00",
+          "foods": [
+            {
+              "name": "Alimento",
+              "quantity": "100g",
+              "calories": 200,
+              "protein": 20,
+              "carbs": 10,
+              "fat": 8
+            }
+          ],
+          "calories": 400,
+          "protein": 30,
+          "carbs": 40,
+          "fat": 12,
+          "recipe": {
+            "ingredients": ["ingrediente 1", "ingrediente 2"],
+            "instructions": ["paso 1", "paso 2"],
+            "prep_time": 10
+          }
+        }
+      ],
+      "total_calories": ${calories}
+    }
+  ]
+}
+
+Incluye los 7 días con variedad. Ajusta los horarios según el horario laboral.
+Evita completamente los alérgenos mencionados.
+Incluye recetas fáciles y rápidas para cada comida principal.`;
+
+  try {
+    const response = await openai!.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres un nutricionista deportivo profesional. Creas planes de alimentación detallados, equilibrados y deliciosos en español. Siempre respetas las restricciones alimentarias.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    return result as WeeklyDietPlan;
+  } catch (error) {
+    console.error('Error generating diet plan:', error);
+    throw error;
+  }
+}
+
+async function generateWeeklyShoppingList(dietPlan: WeeklyDietPlan): Promise<ShoppingListItem[]> {
+  // Extraer todos los alimentos del plan de dieta
+  const allFoods: string[] = [];
+  dietPlan.days?.forEach(day => {
+    day.meals?.forEach(meal => {
+      meal.foods?.forEach(food => {
+        allFoods.push(`${food.name} (${food.quantity})`);
+      });
+      meal.recipe?.ingredients?.forEach(ing => allFoods.push(ing));
+    });
+  });
+
+  const prompt = `Genera una lista de compra semanal consolidada basada en estos alimentos:
+${allFoods.join('\n')}
+
+Agrupa cantidades del mismo ingrediente y redondea hacia arriba.
+Responde en JSON: { "items": [{ "ingredient": "nombre", "quantity": 1, "unit": "kg", "category": "produce|meat|dairy|grains|other", "checked": false }] }`;
+
+  try {
+    const response = await openai!.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: 'Genera listas de compra organizadas y prácticas en español.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: 'json_object' }
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+    return result.items || [];
+  } catch (error) {
+    console.error('Error generating shopping list:', error);
+    return [];
+  }
+}
+
+function getGoalText(goal: string): string {
+  switch (goal) {
+    case 'lose_weight': return 'Perder peso/grasa';
+    case 'gain_muscle': return 'Ganar masa muscular';
+    case 'improve_endurance': return 'Mejorar resistencia y condición física';
+    default: return 'Mantener peso y mejorar composición corporal';
+  }
+}
+
+function generatePersonalizedTips(goals: UserGoals, profileData?: UserProfileData): string[] {
+  const tips: string[] = [];
+  
+  if (goals.primary === 'lose_weight') {
+    tips.push('Mantén un déficit calórico moderado de 300-500 kcal para perder grasa sin perder músculo.');
+    tips.push('Prioriza la proteína en cada comida para preservar masa muscular.');
+  } else if (goals.primary === 'gain_muscle') {
+    tips.push('Come en superávit calórico moderado de 200-300 kcal.');
+    tips.push('Consume proteína cada 3-4 horas para maximizar la síntesis proteica.');
+  }
+  
+  if (profileData?.injuries?.length) {
+    tips.push('Calienta bien antes de entrenar y presta atención a tus zonas lesionadas.');
+  }
+  
+  tips.push('Duerme al menos 7-8 horas para optimizar la recuperación.');
+  tips.push('Mantente hidratado bebiendo 2-3 litros de agua al día.');
+  tips.push('La consistencia es clave: es mejor entrenar 4 días siempre que 6 días una semana y 2 la siguiente.');
+  
+  return tips;
+}
+
+// Función para generar plan de demo cuando no hay API key
+function generateDemoPlan(
+  goals: UserGoals,
+  trainingTypes: TrainingType[],
+  profileData?: UserProfileData,
+  dailyCalories?: number
+): GeneratedPlan {
+  const calories = dailyCalories || calculateTDEE(goals);
+  const isCrossfit = trainingTypes.includes('crossfit');
+  
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  
+  // Generar plan de entrenamiento
+  const workoutDays = dayNames.map((dayName, index) => {
+    const isRestDay = index === 0 || index === 3; // Domingo y Miércoles descanso
+    
+    if (isRestDay) {
+      return {
+        day: index,
+        day_name: dayName,
+        workout_type: 'gym' as TrainingType,
+        title: 'Día de Descanso Activo',
+        duration_minutes: 0,
+        is_rest_day: true,
+        exercises: [],
+        notes: 'Descansa o haz actividad ligera como caminar o estiramientos.'
+      };
+    }
+    
+    // Rotación de entrenamientos
+    const workoutTypes = isCrossfit 
+      ? ['Fuerza + WOD', 'Cardio + Técnica', 'Full Body', 'Gimnásticos + Metcon', 'Olímpicos']
+      : ['Pecho y Tríceps', 'Espalda y Bíceps', 'Piernas', 'Hombros y Core', 'Full Body'];
+    
+    const workoutIndex = [1, 2, 4, 5, 6].indexOf(index);
+    const workout = workoutTypes[workoutIndex] || 'Full Body';
+    
+    return {
+      day: index,
+      day_name: dayName,
+      workout_type: isCrossfit ? 'crossfit' as TrainingType : 'gym' as TrainingType,
+      title: workout,
+      duration_minutes: profileData?.workout_duration_preference || 60,
+      is_rest_day: false,
+      exercises: generateDemoExercises(workout, isCrossfit, profileData?.injuries),
+      notes: `Entreno de ${workout.toLowerCase()}`
+    };
+  });
+  
+  const workoutPlan: WeeklyWorkoutPlan = {
+    name: isCrossfit ? 'Plan CrossFit Personalizado' : 'Plan de Hipertrofia',
+    description: `Plan diseñado para ${getGoalText(goals.primary).toLowerCase()}`,
+    days: workoutDays,
+    rest_days: [0, 3],
+    estimated_calories_burned_weekly: isCrossfit ? 3500 : 2500
+  };
+  
+  // Generar plan de dieta
+  const dietDays = dayNames.map((dayName, index) => ({
+    day: index,
+    day_name: dayName,
+    meals: generateDemoMeals(calories, profileData),
+    total_calories: calories
+  }));
+  
+  const protein = Math.round((calories * 0.3) / 4);
+  const carbs = Math.round((calories * 0.4) / 4);
+  const fat = Math.round((calories * 0.3) / 9);
+  
+  const dietPlan: WeeklyDietPlan = {
+    name: 'Plan Nutricional Equilibrado',
+    description: `${calories} kcal diarias para ${getGoalText(goals.primary).toLowerCase()}`,
+    daily_calories: calories,
+    macros: { protein_grams: protein, carbs_grams: carbs, fat_grams: fat },
+    days: dietDays
+  };
+  
+  return {
+    workout_plan: workoutPlan,
+    diet_plan: dietPlan,
+    shopping_list: getDemoShoppingList().map(item => ({ 
+      ...item, 
+      checked: false,
+      category: item.category as ShoppingListItem['category']
+    })),
+    recommendations: generatePersonalizedTips(goals, profileData),
+    generated_at: new Date().toISOString()
+  };
+}
+
+function generateDemoExercises(workoutType: string, isCrossfit: boolean, injuries?: string[]): PlannedExercise[] {
+  const hasBackInjury = injuries?.some(i => i.toLowerCase().includes('espalda'));
+  const hasKneeInjury = injuries?.some(i => i.toLowerCase().includes('rodilla'));
+  
+  if (isCrossfit) {
+    if (workoutType.includes('Fuerza')) {
+      return [
+        { name: 'Back Squat', sets: 5, reps: '5', weight_recommendation: '75% RM', rest_seconds: 120, alternatives: hasKneeInjury ? ['Leg Press', 'Goblet Squat'] : undefined },
+        { name: 'Strict Press', sets: 5, reps: '5', weight_recommendation: '70% RM', rest_seconds: 120 },
+        { name: 'WOD: 21-15-9', sets: 1, reps: 'Thrusters + Pull-ups', rest_seconds: 0, notes: 'Por tiempo' }
+      ];
+    }
+    return [
+      { name: 'EMOM 10 min', sets: 10, reps: '5 Power Clean', weight_recommendation: '60% RM', rest_seconds: 0 },
+      { name: 'AMRAP 15 min', sets: 1, reps: '12 Cal Row, 9 Burpees, 6 C2B', rest_seconds: 0 }
+    ];
+  }
+  
+  // Gimnasio tradicional
+  if (workoutType.includes('Pecho')) {
+    return [
+      { name: 'Press de Banca', sets: 4, reps: '8-10', weight_recommendation: '75% RM', rest_seconds: 90 },
+      { name: 'Press Inclinado Mancuernas', sets: 3, reps: '10-12', rest_seconds: 60 },
+      { name: 'Aperturas en Polea', sets: 3, reps: '12-15', rest_seconds: 60 },
+      { name: 'Fondos en Paralelas', sets: 3, reps: '10-12', rest_seconds: 60 },
+      { name: 'Press Francés', sets: 3, reps: '10-12', rest_seconds: 60 },
+      { name: 'Extensiones en Polea', sets: 3, reps: '12-15', rest_seconds: 45 }
+    ];
+  }
+  
+  if (workoutType.includes('Espalda')) {
+    const exercises: PlannedExercise[] = [
+      { name: 'Dominadas', sets: 4, reps: '8-10', rest_seconds: 90, alternatives: ['Jalón al Pecho'] },
+      { name: 'Remo con Barra', sets: 4, reps: '8-10', weight_recommendation: '70% RM', rest_seconds: 90 },
+      { name: 'Remo en Polea Baja', sets: 3, reps: '10-12', rest_seconds: 60 },
+      { name: 'Face Pulls', sets: 3, reps: '15', rest_seconds: 45 },
+      { name: 'Curl con Barra', sets: 3, reps: '10-12', rest_seconds: 60 },
+      { name: 'Curl Martillo', sets: 3, reps: '12', rest_seconds: 45 }
+    ];
+    if (hasBackInjury) {
+      exercises[1] = { name: 'Remo en Máquina', sets: 4, reps: '10-12', rest_seconds: 60 };
+    }
+    return exercises;
+  }
+  
+  if (workoutType.includes('Piernas')) {
+    const exercises: PlannedExercise[] = [
+      { name: 'Sentadilla', sets: 4, reps: '8-10', weight_recommendation: '75% RM', rest_seconds: 120 },
+      { name: 'Prensa de Piernas', sets: 4, reps: '10-12', rest_seconds: 90 },
+      { name: 'Peso Muerto Rumano', sets: 3, reps: '10-12', rest_seconds: 90 },
+      { name: 'Extensiones de Cuádriceps', sets: 3, reps: '12-15', rest_seconds: 60 },
+      { name: 'Curl Femoral', sets: 3, reps: '12-15', rest_seconds: 60 },
+      { name: 'Elevaciones de Gemelos', sets: 4, reps: '15-20', rest_seconds: 45 }
+    ];
+    if (hasKneeInjury) {
+      exercises[0] = { name: 'Sentadilla Goblet', sets: 4, reps: '12-15', rest_seconds: 90, notes: 'Peso moderado' };
+    }
+    return exercises;
+  }
+  
+  // Default: Full Body
+  return [
+    { name: 'Sentadilla', sets: 3, reps: '10', weight_recommendation: '70% RM', rest_seconds: 90 },
+    { name: 'Press de Banca', sets: 3, reps: '10', weight_recommendation: '70% RM', rest_seconds: 90 },
+    { name: 'Remo con Barra', sets: 3, reps: '10', rest_seconds: 90 },
+    { name: 'Press Militar', sets: 3, reps: '10', rest_seconds: 60 },
+    { name: 'Peso Muerto', sets: 3, reps: '8', weight_recommendation: '70% RM', rest_seconds: 120 }
+  ];
+}
+
+function generateDemoMeals(dailyCalories: number, profileData?: UserProfileData) {
+  const mealsPerDay = profileData?.meals_per_day || 4;
+  const isVegetarian = profileData?.diet_type === 'vegetarian' || profileData?.diet_type === 'vegan';
+  
+  const breakfastCalories = Math.round(dailyCalories * 0.25);
+  const lunchCalories = Math.round(dailyCalories * 0.35);
+  const dinnerCalories = Math.round(dailyCalories * 0.25);
+  const snackCalories = Math.round(dailyCalories * 0.15);
+  
+  const meals = [
+    {
+      meal_type: 'breakfast' as const,
+      name: 'Desayuno Energético',
+      time_suggestion: '08:00',
+      foods: [
+        { name: 'Avena', quantity: '60g', calories: 230, protein: 8, carbs: 40, fat: 5 },
+        { name: isVegetarian ? 'Leche de almendras' : 'Leche', quantity: '200ml', calories: 100, protein: 7, carbs: 10, fat: 4 },
+        { name: 'Plátano', quantity: '1 unidad', calories: 90, protein: 1, carbs: 23, fat: 0 }
+      ],
+      calories: breakfastCalories,
+      protein: 16,
+      carbs: 73,
+      fat: 9,
+      recipe: {
+        ingredients: ['60g avena', '200ml leche', '1 plátano', '1 cdta miel', 'Canela al gusto'],
+        instructions: ['Calentar leche', 'Añadir avena y cocinar 3-5 min', 'Servir con plátano y miel'],
+        prep_time: 10
+      }
+    },
+    {
+      meal_type: 'lunch' as const,
+      name: isVegetarian ? 'Bowl de Legumbres y Quinoa' : 'Pollo con Arroz y Verduras',
+      time_suggestion: '13:30',
+      foods: isVegetarian ? [
+        { name: 'Quinoa', quantity: '80g', calories: 280, protein: 10, carbs: 50, fat: 4 },
+        { name: 'Garbanzos', quantity: '150g', calories: 220, protein: 12, carbs: 35, fat: 4 },
+        { name: 'Verduras mixtas', quantity: '150g', calories: 50, protein: 3, carbs: 10, fat: 0 }
+      ] : [
+        { name: 'Pechuga de pollo', quantity: '200g', calories: 220, protein: 45, carbs: 0, fat: 3 },
+        { name: 'Arroz integral', quantity: '80g', calories: 280, protein: 6, carbs: 58, fat: 2 },
+        { name: 'Brócoli', quantity: '150g', calories: 50, protein: 4, carbs: 10, fat: 0 }
+      ],
+      calories: lunchCalories,
+      protein: isVegetarian ? 25 : 55,
+      carbs: isVegetarian ? 95 : 68,
+      fat: isVegetarian ? 8 : 5,
+      recipe: {
+        ingredients: isVegetarian 
+          ? ['80g quinoa', '150g garbanzos', '150g verduras', '1 cda aceite', 'Especias']
+          : ['200g pollo', '80g arroz', '150g brócoli', '1 cda aceite', 'Especias'],
+        instructions: isVegetarian
+          ? ['Cocinar quinoa 15 min', 'Saltear verduras', 'Mezclar con garbanzos', 'Aliñar al gusto']
+          : ['Cocinar arroz 20 min', 'Grillar pollo con especias', 'Hervir brócoli 5 min'],
+        prep_time: 25
+      }
+    },
+    {
+      meal_type: 'snack' as const,
+      name: 'Snack Proteico',
+      time_suggestion: '17:00',
+      foods: [
+        { name: 'Yogur griego', quantity: '200g', calories: 130, protein: 20, carbs: 8, fat: 2 },
+        { name: 'Nueces', quantity: '30g', calories: 200, protein: 5, carbs: 4, fat: 19 }
+      ],
+      calories: snackCalories,
+      protein: 25,
+      carbs: 12,
+      fat: 21
+    },
+    {
+      meal_type: 'dinner' as const,
+      name: isVegetarian ? 'Revuelto de Tofu y Verduras' : 'Salmón al Horno con Verduras',
+      time_suggestion: '21:00',
+      foods: isVegetarian ? [
+        { name: 'Tofu', quantity: '200g', calories: 180, protein: 20, carbs: 4, fat: 10 },
+        { name: 'Verduras al horno', quantity: '200g', calories: 80, protein: 3, carbs: 16, fat: 1 },
+        { name: 'Aguacate', quantity: '50g', calories: 80, protein: 1, carbs: 4, fat: 7 }
+      ] : [
+        { name: 'Salmón', quantity: '180g', calories: 350, protein: 36, carbs: 0, fat: 22 },
+        { name: 'Patata', quantity: '150g', calories: 120, protein: 3, carbs: 27, fat: 0 },
+        { name: 'Espárragos', quantity: '100g', calories: 20, protein: 2, carbs: 4, fat: 0 }
+      ],
+      calories: dinnerCalories,
+      protein: isVegetarian ? 24 : 41,
+      carbs: isVegetarian ? 24 : 31,
+      fat: isVegetarian ? 18 : 22,
+      recipe: {
+        ingredients: isVegetarian
+          ? ['200g tofu', '200g verduras', '50g aguacate', '1 cda aceite', 'Salsa soja']
+          : ['180g salmón', '150g patata', '100g espárragos', 'Limón', 'Hierbas'],
+        instructions: isVegetarian
+          ? ['Cortar tofu en cubos', 'Saltear con verduras', 'Añadir salsa soja', 'Servir con aguacate']
+          : ['Hornear salmón 20 min a 180°C', 'Asar patatas', 'Grillar espárragos'],
+        prep_time: 25
+      }
+    }
+  ];
+  
+  return meals.slice(0, mealsPerDay);
 }
 
 // Helper functions
