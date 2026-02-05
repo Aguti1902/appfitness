@@ -31,13 +31,15 @@ export function Sidebar() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
+    console.log('Logout button clicked');
     try {
       await logout();
     } catch (e) {
       console.error('Logout error:', e);
     }
-    // Siempre navegar al login
-    navigate('/login');
+    console.log('Navigating to login...');
+    // Forzar recarga completa para limpiar todo el estado
+    window.location.href = '/login';
   };
 
   return (

@@ -160,8 +160,21 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        await supabase.auth.signOut();
-        set({ user: null, isAuthenticated: false });
+        console.log('Logging out...');
+        try {
+          // Timeout de 3 segundos para signOut
+          const signOutPromise = supabase.auth.signOut();
+          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+          await Promise.race([signOutPromise, timeoutPromise]);
+        } catch (e) {
+          console.error('SignOut error:', e);
+        }
+        // Limpiar localStorage manualmente
+        localStorage.removeItem('supabase-auth');
+        localStorage.removeItem('fitapp-auth');
+        // Limpiar estado
+        set({ user: null, isAuthenticated: false, isLoading: false });
+        console.log('Logged out');
       },
 
       updateProfile: async (data) => {
