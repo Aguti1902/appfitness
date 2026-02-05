@@ -1,25 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase credentials not configured');
+// Debug en desarrollo
+if (import.meta.env.DEV) {
+  console.log('Supabase URL configured:', !!supabaseUrl);
+  console.log('Supabase Key configured:', !!supabaseAnonKey);
 }
 
 export const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey,
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
   {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true, // Dejar que Supabase maneje el hash
-      storage: localStorage,
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? localStorage : undefined,
       storageKey: 'supabase-auth'
     }
   }
 );
+
+export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
 
 // Database schema SQL for reference (run in Supabase SQL editor)
 export const DATABASE_SCHEMA = `

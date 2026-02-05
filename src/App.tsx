@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 // Auth components
 import { LoginPage } from './components/auth/LoginPage';
@@ -127,7 +127,29 @@ function AppContent() {
     };
   }, [setUser]);
 
-  console.log('Render - InitialLoading:', initialLoading, 'Auth:', isAuthenticated);
+  console.log('Render - InitialLoading:', initialLoading, 'Auth:', isAuthenticated, 'Supabase:', isSupabaseConfigured);
+
+  // Mostrar error si Supabase no está configurado
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h1 className="text-xl font-bold text-red-800 mb-2">Error de Configuración</h1>
+          <p className="text-red-600 mb-4">
+            Las variables de entorno de Supabase no están configuradas correctamente.
+          </p>
+          <div className="bg-white rounded-lg p-4 text-left text-sm">
+            <p className="font-medium mb-2">Verifica en Vercel:</p>
+            <code className="block bg-gray-100 p-2 rounded mb-1">VITE_SUPABASE_URL</code>
+            <code className="block bg-gray-100 p-2 rounded">VITE_SUPABASE_ANON_KEY</code>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (initialLoading) {
     return (
