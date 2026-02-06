@@ -23,10 +23,10 @@ const FUN_FACTS = [
   '🧠 El ejercicio mejora la memoria y concentración',
 ];
 
-// Timeout helper
-const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+// Timeout helper - accepts PromiseLike
+const withTimeout = <T,>(promiseLike: PromiseLike<T>, ms: number): Promise<T> => {
   return Promise.race([
-    promise,
+    Promise.resolve(promiseLike),
     new Promise<T>((_, reject) => 
       setTimeout(() => reject(new Error('Timeout')), ms)
     )
@@ -63,17 +63,14 @@ export function AIProcessingPage() {
       
       try {
         console.log('Getting session...');
-        const sessionResult = await withTimeout(
-          supabase.auth.getSession().then(r => r),
-          5000
-        );
+        const sessionResult = await withTimeout(supabase.auth.getSession(), 5000);
         session = sessionResult.data?.session;
         console.log('Session:', session ? 'found' : 'not found');
         
         if (session?.user) {
           console.log('Getting profile...');
           const profileResult = await withTimeout(
-            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(r => r),
+            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
             5000
           );
           profile = profileResult.data;
@@ -152,7 +149,7 @@ export function AIProcessingPage() {
             supabase.from('profiles').update({
               generated_plan: generatedPlan,
               plan_generated_at: new Date().toISOString()
-            }).eq('id', session.user.id).then(r => r),
+            }).eq('id', session.user.id),
             3000
           );
           console.log('Plan saved to Supabase');
