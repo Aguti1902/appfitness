@@ -568,69 +568,36 @@ function generatePersonalizedTips(goals: UserGoals, profileData?: UserProfileDat
 // Función para generar plan de demo - exportada para fallback
 export function generateDemoPlanFallback(
   goals: UserGoals,
-  trainingTypes: TrainingType[],
+  _trainingTypes: TrainingType[],
   profileData?: UserProfileData,
   dailyCalories?: number
 ): GeneratedPlan {
   const calories = dailyCalories || calculateTDEE(goals, profileData);
-  const isCrossfit = trainingTypes.includes('crossfit');
-  const isRunning = trainingTypes.includes('running');
   const experience = profileData?.fitness_experience || 'intermediate';
-  const activityLevel = goals.activity_level || 'moderate';
   
   const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   
-  // Determinar días de descanso según nivel de actividad
-  // Para 5-6 días/semana: descanso el domingo (y miércoles opcional para 5 días)
-  // Para 3-4 días/semana: descanso domingo, martes, jueves o variantes
-  let restDays: number[] = [];
-  
-  if (activityLevel === 'very_active') {
-    // 6 días: solo domingo descanso
-    restDays = [0]; // Domingo
-  } else if (activityLevel === 'active') {
-    // 5 días: domingo y sábado descanso (fin de semana)
-    restDays = [0, 6]; // Domingo y Sábado
-  } else if (activityLevel === 'moderate') {
-    // 4 días: domingo, miércoles y sábado
-    restDays = [0, 3, 6];
-  } else {
-    // 3 días o menos
-    restDays = [0, 2, 4, 6];
-  }
-  
-  // Tipos de entrenamiento para la semana (Push/Pull/Legs x2 o variantes)
-  const getWorkoutSplit = () => {
-    if (isCrossfit) {
-      return [
-        { type: 'Fuerza + Metcon', focus: 'strength' },
-        { type: 'Cardio + Gimnásticos', focus: 'cardio' },
-        { type: 'Olímpicos + WOD', focus: 'olympic' },
-        { type: 'Resistencia + Core', focus: 'endurance' },
-        { type: 'Hero WOD', focus: 'hero' },
-        { type: 'Técnica + Fuerza', focus: 'technique' },
-      ];
-    }
-    
-    // Push/Pull/Legs (PPL) para gimnasio
-    return [
-      { type: 'Push (Pecho, Hombro, Tríceps)', focus: 'push' },
-      { type: 'Pull (Espalda, Bíceps)', focus: 'pull' },
-      { type: 'Piernas + Core', focus: 'legs' },
-      { type: 'Push (Hombro, Pecho, Tríceps)', focus: 'push2' },
-      { type: 'Pull (Espalda, Bíceps, Rear Delt)', focus: 'pull2' },
-      { type: 'Piernas + Glúteos', focus: 'legs2' },
-    ];
+  // Rutina de gimnasio fija:
+  // Lunes (1): Pecho, Martes (2): Espalda, Miércoles (3): Pierna
+  // Jueves (4): Pecho, Viernes (5): Espalda, Sábado (6): Descanso, Domingo (0): Descanso
+  const gymSchedule: Record<number, { title: string; focus: string } | null> = {
+    0: null, // Domingo - Descanso
+    1: { title: 'Pecho + Abdomen', focus: 'chest' },
+    2: { title: 'Espalda + Abdomen', focus: 'back' },
+    3: { title: 'Pierna + Abdomen', focus: 'legs' },
+    4: { title: 'Pecho + Abdomen', focus: 'chest2' },
+    5: { title: 'Espalda + Abdomen', focus: 'back2' },
+    6: null, // Sábado - Descanso
   };
   
-  const workoutSplit = getWorkoutSplit();
-  let workoutIndex = 0;
+  const restDays = [0, 6]; // Domingo y Sábado
+  const duration = profileData?.workout_duration_preference || (experience === 'advanced' ? 90 : experience === 'intermediate' ? 75 : 60);
   
-  // Generar plan de entrenamiento
+  // Generar plan de entrenamiento de gimnasio
   const workoutDays = dayNames.map((dayName, index) => {
-    const isRestDay = restDays.includes(index);
+    const schedule = gymSchedule[index];
     
-    if (isRestDay) {
+    if (!schedule) {
       return {
         day: index,
         day_name: dayName,
@@ -640,38 +607,31 @@ export function generateDemoPlanFallback(
         is_rest_day: true,
         exercises: [],
         notes: index === 0 
-          ? 'Día de descanso completo o cardio suave (30 min caminata).' 
-          : 'Descanso activo: estiramientos, movilidad o paseo ligero.'
+          ? 'Día de descanso completo. Puedes hacer estiramientos o paseo suave.' 
+          : 'Descanso activo: cardio suave, movilidad o yoga.'
       };
     }
     
-    const workout = workoutSplit[workoutIndex % workoutSplit.length];
-    workoutIndex++;
-    
-    const duration = profileData?.workout_duration_preference || (experience === 'advanced' ? 90 : experience === 'intermediate' ? 75 : 60);
+    const exercises = generateGymExercises(schedule.focus, experience, profileData?.injuries);
     
     return {
       day: index,
       day_name: dayName,
-      workout_type: isCrossfit ? 'crossfit' as TrainingType : 'gym' as TrainingType,
-      title: workout.type,
+      workout_type: 'gym' as TrainingType,
+      title: schedule.title,
       duration_minutes: duration,
       is_rest_day: false,
-      exercises: generateAdvancedExercises(workout.focus, experience, profileData?.injuries, isCrossfit, isRunning),
-      notes: getWorkoutNotes(workout.focus, experience)
+      exercises: exercises,
+      notes: getGymWorkoutNotes(schedule.focus, experience)
     };
   });
   
   const workoutPlan: WeeklyWorkoutPlan = {
-    name: isCrossfit 
-      ? `Plan CrossFit ${experience === 'advanced' ? 'Avanzado' : experience === 'intermediate' ? 'Intermedio' : 'Iniciación'}`
-      : `Plan de Masa Muscular ${experience === 'advanced' ? 'Avanzado' : experience === 'intermediate' ? 'Intermedio' : 'Principiante'}`,
-    description: `Este plan está diseñado para ${getGoalText(goals.primary).toLowerCase()}, enfocándose en ${
-      isCrossfit ? 'mejorar tu rendimiento en todas las áreas del fitness' : 'un equilibrio entre hipertrofia y fuerza'
-    }${profileData?.injuries?.length ? `, adaptado a limitaciones de ${profileData.injuries.join(', ').toLowerCase()}` : ''}.`,
+    name: `Plan Gimnasio ${experience === 'advanced' ? 'Avanzado' : experience === 'intermediate' ? 'Intermedio' : 'Principiante'}`,
+    description: `Rutina de 5 días enfocada en ${getGoalText(goals.primary).toLowerCase()}. Pecho 2x, Espalda 2x, Pierna 1x por semana + abdomen diario${profileData?.injuries?.length ? `. Adaptado a: ${profileData.injuries.join(', ').toLowerCase()}` : ''}.`,
     days: workoutDays,
     rest_days: restDays,
-    estimated_calories_burned_weekly: isCrossfit ? 4000 : (experience === 'advanced' ? 3500 : 2800)
+    estimated_calories_burned_weekly: experience === 'advanced' ? 3500 : experience === 'intermediate' ? 3000 : 2500
   };
   
   // Generar plan de dieta con menús diferentes cada día
@@ -709,11 +669,241 @@ export function generateDemoPlanFallback(
   };
 }
 
+// Función para generar ejercicios de GIMNASIO específicos
+function generateGymExercises(
+  focus: string,
+  experience: string,
+  injuries?: string[]
+): PlannedExercise[] {
+  const hasBackInjury = injuries?.some(i => i.toLowerCase().includes('espalda'));
+  const hasShoulderInjury = injuries?.some(i => i.toLowerCase().includes('hombro'));
+  const hasKneeInjury = injuries?.some(i => i.toLowerCase().includes('rodilla'));
+  
+  const getIntensity = () => {
+    if (experience === 'advanced') return { sets: 4, reps: '8-10', rest: 90 };
+    if (experience === 'intermediate') return { sets: 4, reps: '10-12', rest: 75 };
+    return { sets: 3, reps: '12-15', rest: 60 };
+  };
+  
+  const intensity = getIntensity();
+  const exercises: PlannedExercise[] = [];
+  
+  // PECHO
+  if (focus === 'chest' || focus === 'chest2') {
+    exercises.push(
+      {
+        name: 'Press Banca',
+        sets: intensity.sets,
+        reps: intensity.reps,
+        rest_seconds: intensity.rest,
+        weight_recommendation: experience === 'advanced' ? '80-85% RM' : '70-75% RM',
+        notes: hasShoulderInjury ? 'Reduce el rango de movimiento si hay molestias' : 'Controla la bajada 2-3 segundos',
+        alternatives: ['Press Banca Mancuernas', 'Press Máquina']
+      },
+      {
+        name: focus === 'chest' ? 'Press Inclinado Mancuernas' : 'Press Inclinado Barra',
+        sets: intensity.sets,
+        reps: intensity.reps,
+        rest_seconds: intensity.rest,
+        weight_recommendation: '70-75% RM',
+        notes: 'Banco a 30-45 grados',
+        alternatives: ['Press Inclinado Máquina']
+      },
+      {
+        name: focus === 'chest' ? 'Aperturas con Mancuernas' : 'Cruces en Polea',
+        sets: 3,
+        reps: '12-15',
+        rest_seconds: 60,
+        notes: 'Enfoca en la contracción del pectoral',
+        alternatives: ['Pec Deck', 'Aperturas en Máquina']
+      },
+      {
+        name: focus === 'chest' ? 'Fondos en Paralelas' : 'Press Declinado',
+        sets: 3,
+        reps: experience === 'beginner' ? '8-10' : '10-12',
+        rest_seconds: 75,
+        notes: focus === 'chest' ? 'Inclínate hacia adelante para enfatizar pecho' : 'Banco a 15-20 grados de declive',
+        alternatives: ['Fondos Asistidos', 'Press Declinado Máquina']
+      },
+      {
+        name: 'Pullover con Mancuerna',
+        sets: 3,
+        reps: '12-15',
+        rest_seconds: 60,
+        notes: 'Excelente para expandir la caja torácica',
+        alternatives: ['Pullover en Polea']
+      }
+    );
+  }
+  
+  // ESPALDA
+  if (focus === 'back' || focus === 'back2') {
+    exercises.push(
+      {
+        name: hasBackInjury ? 'Jalón al Pecho' : 'Dominadas',
+        sets: intensity.sets,
+        reps: hasBackInjury ? '10-12' : (experience === 'beginner' ? '6-8' : '8-12'),
+        rest_seconds: intensity.rest,
+        notes: hasBackInjury ? 'Mantén la espalda recta' : 'Agarre prono, ancho de hombros',
+        alternatives: ['Dominadas Asistidas', 'Jalón al Pecho']
+      },
+      {
+        name: focus === 'back' ? 'Remo con Barra' : 'Remo con Mancuerna',
+        sets: intensity.sets,
+        reps: intensity.reps,
+        rest_seconds: intensity.rest,
+        weight_recommendation: '70-75% RM',
+        notes: hasBackInjury ? 'Usa peso moderado y técnica estricta' : 'Mantén la espalda neutra',
+        alternatives: ['Remo en Máquina', 'Remo T-Bar']
+      },
+      {
+        name: focus === 'back' ? 'Jalón Agarre Cerrado' : 'Jalón Agarre Neutro',
+        sets: 3,
+        reps: '10-12',
+        rest_seconds: 60,
+        notes: 'Enfoca en contraer los dorsales',
+        alternatives: ['Pulldown Máquina']
+      },
+      {
+        name: 'Remo en Polea Baja',
+        sets: 3,
+        reps: '10-12',
+        rest_seconds: 60,
+        notes: 'Tira hacia el ombligo, no hacia el pecho',
+        alternatives: ['Remo Sentado Máquina']
+      },
+      {
+        name: focus === 'back' ? 'Face Pulls' : 'Encogimientos con Barra',
+        sets: 3,
+        reps: '15-20',
+        rest_seconds: 45,
+        notes: focus === 'back' ? 'Excelente para salud de hombros' : 'Sube solo los hombros, no los brazos',
+        alternatives: ['Encogimientos con Mancuernas']
+      },
+      {
+        name: 'Curl de Bíceps con Barra',
+        sets: 3,
+        reps: '10-12',
+        rest_seconds: 60,
+        notes: 'Sin balanceo, codos pegados al cuerpo',
+        alternatives: ['Curl con Mancuernas']
+      },
+      {
+        name: focus === 'back' ? 'Curl Martillo' : 'Curl Concentrado',
+        sets: 3,
+        reps: '12-15',
+        rest_seconds: 45,
+        notes: 'Contracción controlada',
+        alternatives: ['Curl en Polea']
+      }
+    );
+  }
+  
+  // PIERNA
+  if (focus === 'legs') {
+    exercises.push(
+      {
+        name: hasKneeInjury ? 'Prensa de Piernas' : 'Sentadilla con Barra',
+        sets: intensity.sets,
+        reps: hasKneeInjury ? '12-15' : intensity.reps,
+        rest_seconds: 120,
+        weight_recommendation: hasKneeInjury ? '60-65% RM' : '75-80% RM',
+        notes: hasKneeInjury ? 'Rango de movimiento cómodo' : 'Baja hasta paralelo mínimo',
+        alternatives: ['Sentadilla Goblet', 'Hack Squat']
+      },
+      {
+        name: 'Prensa de Piernas',
+        sets: intensity.sets,
+        reps: '10-12',
+        rest_seconds: 90,
+        notes: 'Pies a la altura de los hombros',
+        alternatives: ['Prensa 45°']
+      },
+      {
+        name: hasKneeInjury ? 'Puente de Glúteos' : 'Peso Muerto Rumano',
+        sets: intensity.sets,
+        reps: hasKneeInjury ? '15-20' : '10-12',
+        rest_seconds: 90,
+        notes: hasKneeInjury ? 'Aprieta glúteos arriba' : 'Piernas semi-flexionadas, espalda recta',
+        alternatives: ['Hip Thrust', 'Buenos Días']
+      },
+      {
+        name: 'Extensiones de Cuádriceps',
+        sets: 3,
+        reps: '12-15',
+        rest_seconds: 60,
+        notes: hasKneeInjury ? 'Peso ligero, movimiento controlado' : 'Contrae arriba 1 segundo',
+        alternatives: []
+      },
+      {
+        name: 'Curl Femoral Tumbado',
+        sets: 3,
+        reps: '12-15',
+        rest_seconds: 60,
+        notes: 'No despegues la cadera del banco',
+        alternatives: ['Curl Femoral Sentado']
+      },
+      {
+        name: 'Elevaciones de Gemelos',
+        sets: 4,
+        reps: '15-20',
+        rest_seconds: 45,
+        notes: 'Rango completo de movimiento, pausa arriba',
+        alternatives: ['Gemelos en Prensa', 'Gemelos Sentado']
+      }
+    );
+  }
+  
+  // ABDOMEN (se añade al final de cada día)
+  const abExercises: PlannedExercise[] = [
+    {
+      name: 'Crunch en Máquina o Polea',
+      sets: 3,
+      reps: '15-20',
+      rest_seconds: 30,
+      notes: 'Contrae el abdomen, no tires del cuello'
+    },
+    {
+      name: 'Plancha',
+      sets: 3,
+      reps: '30-45 seg',
+      rest_seconds: 30,
+      notes: 'Mantén el core apretado y la espalda recta'
+    },
+    {
+      name: 'Elevación de Piernas Colgado',
+      sets: 3,
+      reps: '12-15',
+      rest_seconds: 30,
+      notes: hasBackInjury ? 'Flexiona las rodillas si es necesario' : 'Sube las piernas sin balanceo',
+      alternatives: ['Elevación en Banco', 'Crunch Inverso']
+    }
+  ];
+  
+  // Añadir abdomen a todos los días de entrenamiento
+  exercises.push(...abExercises);
+  
+  return exercises;
+}
+
+// Notas específicas para entrenamientos de gimnasio
+function getGymWorkoutNotes(focus: string, experience: string): string {
+  const notes: Record<string, string> = {
+    chest: `Día de pecho: Enfócate en la conexión mente-músculo. ${experience === 'advanced' ? 'Puedes añadir técnicas de intensidad como drop sets en el último ejercicio.' : 'Controla el movimiento en todo momento.'}`,
+    chest2: `Segundo día de pecho de la semana. ${experience === 'advanced' ? 'Varía ángulos y agarres respecto al primer día.' : 'Mantén la técnica aunque estés fatigado.'}`,
+    back: `Día de espalda: Tira con los codos, no con las manos. ${experience === 'advanced' ? 'Puedes usar straps para los ejercicios pesados.' : 'Prioriza sentir el músculo trabajar.'}`,
+    back2: `Segundo día de espalda. ${experience === 'advanced' ? 'Enfócate en ejercicios de aislamiento y bombeo.' : 'Si estás muy fatigado, reduce el peso y aumenta las repeticiones.'}`,
+    legs: `Día de pierna: El más exigente de la semana. ${experience === 'advanced' ? 'Puedes hacer superseries en ejercicios de aislamiento.' : 'Hidratación extra importante hoy.'}`
+  };
+  
+  return notes[focus] || 'Mantén buena técnica y controla el movimiento.';
+}
+
 function generateAdvancedExercises(
   focus: string, 
   experience: string, 
   injuries?: string[], 
-  isCrossfit?: boolean,
+  _isCrossfit?: boolean,
   _isRunning?: boolean
 ): PlannedExercise[] {
   const hasBackInjury = injuries?.some(i => i.toLowerCase().includes('espalda'));
@@ -728,11 +918,6 @@ function generateAdvancedExercises(
   };
   
   const intensity = getIntensity();
-  
-  // CrossFit
-  if (isCrossfit) {
-    return generateCrossfitWorkout(focus, experience, injuries);
-  }
   
   // Push Day (Pecho, Hombro, Tríceps)
   if (focus === 'push' || focus === 'push2') {
