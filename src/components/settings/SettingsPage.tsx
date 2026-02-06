@@ -51,7 +51,7 @@ const COMMON_INJURIES = [
 ];
 
 export function SettingsPage() {
-  const { user, updateProfile, logout, setUser } = useAuthStore();
+  const { user, logout, setUser } = useAuthStore();
   
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -123,7 +123,18 @@ export function SettingsPage() {
       setFavoriteFoods(profileData.favorite_foods?.join(', ') || '');
       setInjuries(profileData.injuries || []);
       setFitnessExperience(profileData.fitness_experience || 'intermediate');
-      setSportsFrequency(profileData.sports_frequency || {});
+      if (profileData.sports_frequency) {
+        // Asegurar que todos los valores tienen duration definido
+        const freq: Record<string, { days: number; duration: number; type?: 'class' | 'open' }> = {};
+        Object.entries(profileData.sports_frequency).forEach(([key, value]) => {
+          freq[key] = {
+            days: value.days || 3,
+            duration: value.duration || 60,
+            type: value.type
+          };
+        });
+        setSportsFrequency(freq);
+      }
     }
   }, [user]);
 
