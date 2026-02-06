@@ -6,7 +6,7 @@ import { LoadingScreen } from '../ui/LoadingSpinner';
 import { Sidebar } from '../ui/Sidebar';
 
 export function ProtectedRoute() {
-  const { user, isAuthenticated, isLoading, setUser } = useAuthStore();
+  const { isAuthenticated, isLoading, setUser } = useAuthStore();
   const [checking, setChecking] = useState(true);
   const [hasSession, setHasSession] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
@@ -14,22 +14,16 @@ export function ProtectedRoute() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Si el store ya dice que está autenticado, confiar en él
-      if (isAuthenticated && !isLoading && user) {
-        setHasSession(true);
-        // Verificar si necesita onboarding (no tiene training_types configurados)
-        const hasCompletedOnboarding = user.training_types && user.training_types.length > 0;
-        setNeedsOnboarding(!hasCompletedOnboarding);
-        setChecking(false);
-        return;
-      }
-
-      // Si no, verificar directamente con Supabase
+      console.log('=== ProtectedRoute: Checking auth ===');
+      
+      // SIEMPRE verificar con Supabase para tener datos frescos
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
-          // Hay sesión válida, obtener perfil de Supabase
+          console.log('Session found for:', session.user.email);
+          
+          // Hay sesión válida, obtener perfil FRESCO de Supabase
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('*')
@@ -39,6 +33,12 @@ export function ProtectedRoute() {
           if (profileError) {
             console.error('Error fetching profile:', profileError);
           }
+
+          console.log('Profile from Supabase:', profile ? {
+            training_types: profile.training_types,
+            has_goals: !!profile.goals,
+            has_plan: !!profile.generated_plan
+          } : 'NO PROFILE FOUND');
 
           const userData = {
             id: session.user.id,
@@ -56,16 +56,21 @@ export function ProtectedRoute() {
           
           // Si hay un plan generado en Supabase, sincronizarlo con localStorage
           if (profile?.generated_plan) {
-            console.log('Loading generated plan from Supabase');
+            console.log('✅ Loading generated plan from Supabase');
             localStorage.setItem('fitapp-generated-plan', JSON.stringify(profile.generated_plan));
           }
           
-          // Verificar si necesita onboarding
-          const hasCompletedOnboarding = userData.training_types && userData.training_types.length > 0;
+          // Verificar si necesita onboarding (training_types es el indicador clave)
+          const hasCompletedOnboarding = profile?.training_types && profile.training_types.length > 0;
           setNeedsOnboarding(!hasCompletedOnboarding);
           
-          console.log('User loaded:', userData.email, 'Training types:', userData.training_types, 'Needs onboarding:', !hasCompletedOnboarding);
+          console.log('Auth result:', {
+            email: userData.email,
+            trainingTypes: userData.training_types,
+            needsOnboarding: !hasCompletedOnboarding
+          });
         } else {
+          console.log('No session found');
           setHasSession(false);
           setNeedsOnboarding(false);
         }
@@ -79,7 +84,7 @@ export function ProtectedRoute() {
     };
 
     checkAuth();
-  }, [isAuthenticated, isLoading, setUser, user]);
+  }, [setUser]); // Solo depende de setUser, no de isAuthenticated/user para evitar loops
 
   if (isLoading || checking) {
     return <LoadingScreen />;

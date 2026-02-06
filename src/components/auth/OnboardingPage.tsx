@@ -256,34 +256,55 @@ export function OnboardingPage() {
       }
     }
 
-    // Guardar en Supabase si tenemos userId (con timeout de 5 segundos)
+    // Guardar en Supabase si tenemos userId (con timeout de 8 segundos)
     if (userId) {
       console.log('Saving to Supabase for user:', userId);
       
+      // Obtener email del usuario actual
+      const userEmail = user?.email || (await supabase.auth.getSession()).data?.session?.user?.email;
+      
       const saveToSupabase = async () => {
+        // Usar UPSERT para garantizar que los datos se guarden aunque el perfil no exista
         const { error } = await supabase
           .from('profiles')
-          .update({
+          .upsert({
+            id: userId,
+            email: userEmail,
+            name: user?.name || userEmail?.split('@')[0] || 'Usuario',
             goals,
             training_types: trainingTypes,
             profile_data: profileData,
-          })
-          .eq('id', userId);
+            updated_at: new Date().toISOString()
+          }, { 
+            onConflict: 'id',
+            ignoreDuplicates: false 
+          });
         return error;
       };
 
       const timeoutPromise = new Promise<string>((resolve) => 
-        setTimeout(() => resolve('TIMEOUT'), 5000)
+        setTimeout(() => resolve('TIMEOUT'), 8000)
       );
 
       try {
         const result = await Promise.race([saveToSupabase(), timeoutPromise]);
         if (result === 'TIMEOUT') {
-          console.warn('Supabase save timed out after 5s - continuing anyway');
+          console.warn('Supabase save timed out after 8s - continuing anyway');
         } else if (result) {
           console.error('Supabase error:', result);
+          // Intentar un segundo intento con update simple
+          console.log('Retrying with simple update...');
+          try {
+            await supabase
+              .from('profiles')
+              .update({ goals, training_types: trainingTypes, profile_data: profileData })
+              .eq('id', userId);
+            console.log('Retry update successful');
+          } catch (retryErr) {
+            console.error('Retry also failed:', retryErr);
+          }
         } else {
-          console.log('Saved to Supabase successfully');
+          console.log('✅ Saved to Supabase successfully');
         }
       } catch (e) {
         console.error('Error saving to Supabase:', e);
