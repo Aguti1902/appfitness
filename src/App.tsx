@@ -9,6 +9,7 @@ import { RegisterPage } from './components/auth/RegisterPage';
 import { OnboardingPage } from './components/auth/OnboardingPage';
 import { AIProcessingPage } from './components/auth/AIProcessingPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { InstallPWABanner } from './components/ui/InstallPWABanner';
 
 // Lazy loading para componentes secundarios
 const DashboardPage = lazy(() => import('./components/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -188,6 +189,7 @@ function App() {
   return (
     <BrowserRouter>
       <AppContent />
+      <InstallPWABanner />
     </BrowserRouter>
   );
 }
