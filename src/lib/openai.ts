@@ -538,7 +538,7 @@ export function generateDemoPlanFallback(
   profileData?: UserProfileData,
   dailyCalories?: number
 ): GeneratedPlan {
-  const calories = dailyCalories || calculateTDEE(goals);
+  const calories = dailyCalories || calculateTDEE(goals, profileData);
   const isCrossfit = trainingTypes.includes('crossfit');
   const isRunning = trainingTypes.includes('running');
   const experience = profileData?.fitness_experience || 'intermediate';
@@ -640,11 +640,11 @@ export function generateDemoPlanFallback(
     estimated_calories_burned_weekly: isCrossfit ? 4000 : (experience === 'advanced' ? 3500 : 2800)
   };
   
-  // Generar plan de dieta
+  // Generar plan de dieta con menús diferentes cada día
   const dietDays = dayNames.map((dayName, index) => ({
     day: index,
     day_name: dayName,
-    meals: generateDemoMeals(calories, profileData),
+    meals: generateDemoMeals(calories, profileData, index),
     total_calories: calories
   }));
   
@@ -1073,130 +1073,422 @@ function getWorkoutNotes(focus: string, experience: string): string {
   return notes[focus] || 'Entreno completo.';
 }
 
-function generateDemoMeals(dailyCalories: number, profileData?: UserProfileData) {
+function generateDemoMeals(dailyCalories: number, profileData?: UserProfileData, dayIndex: number = 0) {
   const mealsPerDay = profileData?.meals_per_day || 4;
   const isVegetarian = profileData?.diet_type === 'vegetarian' || profileData?.diet_type === 'vegan';
+  const allergies = profileData?.allergies || [];
+  const hasGlutenAllergy = allergies.some(a => a.toLowerCase().includes('gluten'));
+  const hasDairyAllergy = allergies.some(a => a.toLowerCase().includes('lactosa') || a.toLowerCase().includes('lácteo'));
   
   const breakfastCalories = Math.round(dailyCalories * 0.25);
   const lunchCalories = Math.round(dailyCalories * 0.35);
   const dinnerCalories = Math.round(dailyCalories * 0.25);
   const snackCalories = Math.round(dailyCalories * 0.15);
-  
-  const meals = [
+
+  // DESAYUNOS VARIADOS (7 opciones)
+  const breakfasts = [
     {
-      meal_type: 'breakfast' as const,
-      name: 'Desayuno Energético',
-      time_suggestion: '08:00',
+      name: 'Bowl de Avena con Frutas',
       foods: [
-        { name: 'Avena', quantity: '60g', calories: 230, protein: 8, carbs: 40, fat: 5 },
-        { name: isVegetarian ? 'Leche de almendras' : 'Leche', quantity: '200ml', calories: 100, protein: 7, carbs: 10, fat: 4 },
-        { name: 'Plátano', quantity: '1 unidad', calories: 90, protein: 1, carbs: 23, fat: 0 }
+        { name: hasGlutenAllergy ? 'Avena sin gluten' : 'Avena', quantity: '80g', calories: 300, protein: 10, carbs: 54, fat: 6 },
+        { name: hasDairyAllergy ? 'Leche de almendras' : 'Leche', quantity: '250ml', calories: 120, protein: 8, carbs: 12, fat: 5 },
+        { name: 'Plátano', quantity: '1 unidad', calories: 105, protein: 1, carbs: 27, fat: 0 },
+        { name: 'Arándanos', quantity: '50g', calories: 30, protein: 0, carbs: 7, fat: 0 },
+        { name: 'Mantequilla de cacahuete', quantity: '20g', calories: 120, protein: 5, carbs: 4, fat: 10 }
       ],
-      calories: breakfastCalories,
-      protein: 16,
-      carbs: 73,
-      fat: 9,
-      recipe: {
-        ingredients: ['60g avena', '200ml leche', '1 plátano', '1 cdta miel', 'Canela al gusto'],
-        instructions: ['Calentar leche', 'Añadir avena y cocinar 3-5 min', 'Servir con plátano y miel'],
-        prep_time: 10
-      }
+      recipe: { ingredients: ['80g avena', '250ml leche', '1 plátano', '50g arándanos', '20g mantequilla cacahuete', 'Canela'], instructions: ['Cocinar avena con leche 5 min', 'Añadir frutas y mantequilla'], prep_time: 10 }
     },
     {
-      meal_type: 'lunch' as const,
-      name: isVegetarian ? 'Bowl de Legumbres y Quinoa' : 'Pollo con Arroz y Verduras',
-      time_suggestion: '13:30',
-      foods: isVegetarian ? [
-        { name: 'Quinoa', quantity: '80g', calories: 280, protein: 10, carbs: 50, fat: 4 },
-        { name: 'Garbanzos', quantity: '150g', calories: 220, protein: 12, carbs: 35, fat: 4 },
-        { name: 'Verduras mixtas', quantity: '150g', calories: 50, protein: 3, carbs: 10, fat: 0 }
-      ] : [
-        { name: 'Pechuga de pollo', quantity: '200g', calories: 220, protein: 45, carbs: 0, fat: 3 },
-        { name: 'Arroz integral', quantity: '80g', calories: 280, protein: 6, carbs: 58, fat: 2 },
-        { name: 'Brócoli', quantity: '150g', calories: 50, protein: 4, carbs: 10, fat: 0 }
-      ],
-      calories: lunchCalories,
-      protein: isVegetarian ? 25 : 55,
-      carbs: isVegetarian ? 95 : 68,
-      fat: isVegetarian ? 8 : 5,
-      recipe: {
-        ingredients: isVegetarian 
-          ? ['80g quinoa', '150g garbanzos', '150g verduras', '1 cda aceite', 'Especias']
-          : ['200g pollo', '80g arroz', '150g brócoli', '1 cda aceite', 'Especias'],
-        instructions: isVegetarian
-          ? ['Cocinar quinoa 15 min', 'Saltear verduras', 'Mezclar con garbanzos', 'Aliñar al gusto']
-          : ['Cocinar arroz 20 min', 'Grillar pollo con especias', 'Hervir brócoli 5 min'],
-        prep_time: 25
-      }
-    },
-    {
-      meal_type: 'snack' as const,
-      name: 'Snack Proteico',
-      time_suggestion: '17:00',
+      name: 'Tostadas con Aguacate y Huevos',
       foods: [
-        { name: 'Yogur griego', quantity: '200g', calories: 130, protein: 20, carbs: 8, fat: 2 },
-        { name: 'Nueces', quantity: '30g', calories: 200, protein: 5, carbs: 4, fat: 19 }
+        { name: hasGlutenAllergy ? 'Pan sin gluten' : 'Pan integral', quantity: '2 rebanadas', calories: 180, protein: 8, carbs: 30, fat: 3 },
+        { name: 'Aguacate', quantity: '100g', calories: 160, protein: 2, carbs: 9, fat: 15 },
+        { name: isVegetarian ? 'Tofu revuelto' : 'Huevos revueltos', quantity: isVegetarian ? '150g' : '3 huevos', calories: 220, protein: 18, carbs: 2, fat: 15 },
+        { name: 'Tomate cherry', quantity: '80g', calories: 15, protein: 1, carbs: 3, fat: 0 }
       ],
-      calories: snackCalories,
-      protein: 25,
-      carbs: 12,
-      fat: 21
+      recipe: { ingredients: ['2 rebanadas pan', '1 aguacate', '3 huevos', 'Tomates', 'Sal, pimienta'], instructions: ['Tostar pan', 'Machacar aguacate', 'Revolver huevos', 'Montar tostadas'], prep_time: 15 }
     },
     {
-      meal_type: 'dinner' as const,
-      name: isVegetarian ? 'Revuelto de Tofu y Verduras' : 'Salmón al Horno con Verduras',
-      time_suggestion: '21:00',
-      foods: isVegetarian ? [
-        { name: 'Tofu', quantity: '200g', calories: 180, protein: 20, carbs: 4, fat: 10 },
-        { name: 'Verduras al horno', quantity: '200g', calories: 80, protein: 3, carbs: 16, fat: 1 },
+      name: 'Smoothie Bowl Proteico',
+      foods: [
+        { name: 'Proteína whey', quantity: '30g', calories: 120, protein: 24, carbs: 3, fat: 1 },
+        { name: 'Plátano congelado', quantity: '1 unidad', calories: 105, protein: 1, carbs: 27, fat: 0 },
+        { name: 'Fresas', quantity: '100g', calories: 33, protein: 1, carbs: 8, fat: 0 },
+        { name: hasDairyAllergy ? 'Leche de coco' : 'Leche', quantity: '200ml', calories: 100, protein: 6, carbs: 10, fat: 4 },
+        { name: 'Granola', quantity: '40g', calories: 180, protein: 4, carbs: 28, fat: 6 },
+        { name: 'Semillas de chía', quantity: '10g', calories: 50, protein: 2, carbs: 4, fat: 3 }
+      ],
+      recipe: { ingredients: ['30g proteína', '1 plátano', '100g fresas', '200ml leche', '40g granola', '10g chía'], instructions: ['Batir proteína, plátano, fresas y leche', 'Servir en bowl', 'Añadir granola y chía'], prep_time: 8 }
+    },
+    {
+      name: 'Tortilla de Claras con Verduras',
+      foods: [
+        { name: isVegetarian ? 'Tofu firme' : 'Claras de huevo', quantity: isVegetarian ? '200g' : '6 claras', calories: 100, protein: 22, carbs: 1, fat: 0 },
+        { name: 'Espinacas', quantity: '80g', calories: 20, protein: 2, carbs: 3, fat: 0 },
+        { name: 'Champiñones', quantity: '100g', calories: 22, protein: 3, carbs: 3, fat: 0 },
+        { name: 'Pimiento rojo', quantity: '80g', calories: 25, protein: 1, carbs: 5, fat: 0 },
+        { name: hasGlutenAllergy ? 'Tostada sin gluten' : 'Pan integral', quantity: '2 rebanadas', calories: 180, protein: 8, carbs: 30, fat: 3 },
+        { name: hasDairyAllergy ? 'Queso vegano' : 'Queso bajo en grasa', quantity: '30g', calories: 80, protein: 7, carbs: 1, fat: 5 }
+      ],
+      recipe: { ingredients: ['6 claras', 'Espinacas', 'Champiñones', 'Pimiento', 'Queso', 'Pan'], instructions: ['Saltear verduras', 'Añadir claras batidas', 'Cocinar tortilla', 'Servir con tostadas'], prep_time: 15 }
+    },
+    {
+      name: 'Gachas de Avena con Proteína',
+      foods: [
+        { name: 'Avena', quantity: '70g', calories: 260, protein: 9, carbs: 47, fat: 5 },
+        { name: 'Proteína en polvo', quantity: '25g', calories: 100, protein: 20, carbs: 2, fat: 1 },
+        { name: hasDairyAllergy ? 'Bebida de soja' : 'Leche', quantity: '300ml', calories: 150, protein: 10, carbs: 15, fat: 6 },
+        { name: 'Manzana', quantity: '1 unidad', calories: 80, protein: 0, carbs: 21, fat: 0 },
+        { name: 'Almendras', quantity: '20g', calories: 120, protein: 4, carbs: 3, fat: 10 }
+      ],
+      recipe: { ingredients: ['70g avena', '25g proteína', '300ml leche', '1 manzana', '20g almendras', 'Canela'], instructions: ['Cocinar avena con leche', 'Mezclar proteína', 'Añadir manzana troceada y almendras'], prep_time: 12 }
+    },
+    {
+      name: 'Yogur con Granola y Frutas',
+      foods: [
+        { name: hasDairyAllergy ? 'Yogur de coco' : 'Yogur griego', quantity: '300g', calories: 200, protein: 30, carbs: 12, fat: 3 },
+        { name: 'Granola casera', quantity: '50g', calories: 220, protein: 5, carbs: 35, fat: 8 },
+        { name: 'Mango', quantity: '100g', calories: 60, protein: 1, carbs: 15, fat: 0 },
+        { name: 'Kiwi', quantity: '1 unidad', calories: 40, protein: 1, carbs: 9, fat: 0 },
+        { name: 'Miel', quantity: '15g', calories: 45, protein: 0, carbs: 12, fat: 0 }
+      ],
+      recipe: { ingredients: ['300g yogur', '50g granola', '100g mango', '1 kiwi', '15g miel'], instructions: ['Poner yogur en bowl', 'Añadir frutas troceadas', 'Cubrir con granola y miel'], prep_time: 5 }
+    },
+    {
+      name: 'Huevos Benedictinos Fitness',
+      foods: [
+        { name: isVegetarian ? 'Tofu revuelto' : 'Huevos pochados', quantity: isVegetarian ? '150g' : '3 huevos', calories: 210, protein: 18, carbs: 1, fat: 15 },
+        { name: isVegetarian ? 'Bacon vegano' : 'Bacon de pavo', quantity: '60g', calories: 90, protein: 12, carbs: 1, fat: 4 },
+        { name: 'English muffin integral', quantity: '1 unidad', calories: 130, protein: 5, carbs: 25, fat: 1 },
+        { name: 'Espinacas', quantity: '50g', calories: 12, protein: 1, carbs: 2, fat: 0 },
         { name: 'Aguacate', quantity: '50g', calories: 80, protein: 1, carbs: 4, fat: 7 }
-      ] : [
-        { name: 'Salmón', quantity: '180g', calories: 350, protein: 36, carbs: 0, fat: 22 },
-        { name: 'Patata', quantity: '150g', calories: 120, protein: 3, carbs: 27, fat: 0 },
-        { name: 'Espárragos', quantity: '100g', calories: 20, protein: 2, carbs: 4, fat: 0 }
       ],
-      calories: dinnerCalories,
-      protein: isVegetarian ? 24 : 41,
-      carbs: isVegetarian ? 24 : 31,
-      fat: isVegetarian ? 18 : 22,
-      recipe: {
-        ingredients: isVegetarian
-          ? ['200g tofu', '200g verduras', '50g aguacate', '1 cda aceite', 'Salsa soja']
-          : ['180g salmón', '150g patata', '100g espárragos', 'Limón', 'Hierbas'],
-        instructions: isVegetarian
-          ? ['Cortar tofu en cubos', 'Saltear con verduras', 'Añadir salsa soja', 'Servir con aguacate']
-          : ['Hornear salmón 20 min a 180°C', 'Asar patatas', 'Grillar espárragos'],
-        prep_time: 25
-      }
+      recipe: { ingredients: ['3 huevos', '60g bacon pavo', '1 muffin', 'Espinacas', 'Aguacate'], instructions: ['Pochar huevos', 'Tostar muffin', 'Cocinar bacon', 'Montar con espinacas y aguacate'], prep_time: 20 }
     }
   ];
+
+  // COMIDAS VARIADAS (7 opciones)
+  const lunches = [
+    {
+      name: isVegetarian ? 'Buddha Bowl de Legumbres' : 'Pollo a la Plancha con Arroz',
+      foods: isVegetarian ? [
+        { name: 'Garbanzos', quantity: '200g', calories: 280, protein: 15, carbs: 45, fat: 5 },
+        { name: 'Quinoa', quantity: '100g', calories: 350, protein: 13, carbs: 62, fat: 6 },
+        { name: 'Boniato asado', quantity: '150g', calories: 130, protein: 2, carbs: 30, fat: 0 },
+        { name: 'Aguacate', quantity: '80g', calories: 130, protein: 2, carbs: 7, fat: 12 },
+        { name: 'Verduras mixtas', quantity: '150g', calories: 50, protein: 3, carbs: 10, fat: 0 }
+      ] : [
+        { name: 'Pechuga de pollo', quantity: '250g', calories: 275, protein: 55, carbs: 0, fat: 4 },
+        { name: 'Arroz integral', quantity: '120g (peso seco)', calories: 420, protein: 9, carbs: 87, fat: 3 },
+        { name: 'Brócoli', quantity: '200g', calories: 68, protein: 6, carbs: 14, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '15ml', calories: 135, protein: 0, carbs: 0, fat: 15 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['200g garbanzos', '100g quinoa', '150g boniato', '80g aguacate', 'Verduras'] : ['250g pollo', '120g arroz', '200g brócoli', 'Aceite', 'Especias'], instructions: isVegetarian ? ['Cocinar quinoa', 'Asar boniato', 'Montar bowl con todos los ingredientes'] : ['Cocinar arroz 20 min', 'Grillar pollo con especias', 'Hervir brócoli al dente'], prep_time: 30 }
+    },
+    {
+      name: isVegetarian ? 'Curry de Lentejas' : 'Ternera con Patatas',
+      foods: isVegetarian ? [
+        { name: 'Lentejas', quantity: '200g', calories: 230, protein: 18, carbs: 40, fat: 1 },
+        { name: 'Arroz basmati', quantity: '100g', calories: 350, protein: 7, carbs: 77, fat: 1 },
+        { name: 'Leche de coco', quantity: '100ml', calories: 180, protein: 2, carbs: 3, fat: 18 },
+        { name: 'Espinacas', quantity: '100g', calories: 25, protein: 3, carbs: 4, fat: 0 },
+        { name: 'Tomate', quantity: '150g', calories: 27, protein: 1, carbs: 6, fat: 0 }
+      ] : [
+        { name: 'Filete de ternera', quantity: '200g', calories: 280, protein: 50, carbs: 0, fat: 8 },
+        { name: 'Patatas al horno', quantity: '250g', calories: 213, protein: 5, carbs: 48, fat: 0 },
+        { name: 'Judías verdes', quantity: '150g', calories: 47, protein: 3, carbs: 10, fat: 0 },
+        { name: 'Champiñones', quantity: '100g', calories: 22, protein: 3, carbs: 3, fat: 0 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['200g lentejas', '100g arroz', '100ml leche coco', 'Espinacas', 'Curry en polvo'] : ['200g ternera', '250g patatas', 'Judías', 'Champiñones', 'Romero'], instructions: isVegetarian ? ['Cocinar lentejas con curry y leche de coco', 'Añadir espinacas', 'Servir con arroz'] : ['Hornear patatas 40 min', 'Grillar ternera a punto', 'Saltear judías y champiñones'], prep_time: 35 }
+    },
+    {
+      name: isVegetarian ? 'Tacos de Tofu' : 'Pavo con Verduras Salteadas',
+      foods: isVegetarian ? [
+        { name: 'Tofu firme', quantity: '250g', calories: 225, protein: 25, carbs: 5, fat: 12 },
+        { name: 'Tortillas de maíz', quantity: '3 unidades', calories: 210, protein: 6, carbs: 42, fat: 3 },
+        { name: 'Frijoles negros', quantity: '150g', calories: 200, protein: 13, carbs: 35, fat: 1 },
+        { name: 'Aguacate', quantity: '100g', calories: 160, protein: 2, carbs: 9, fat: 15 },
+        { name: 'Pico de gallo', quantity: '100g', calories: 20, protein: 1, carbs: 4, fat: 0 }
+      ] : [
+        { name: 'Pechuga de pavo', quantity: '250g', calories: 275, protein: 58, carbs: 0, fat: 3 },
+        { name: 'Arroz integral', quantity: '100g', calories: 350, protein: 8, carbs: 73, fat: 3 },
+        { name: 'Pimiento tricolor', quantity: '200g', calories: 52, protein: 2, carbs: 12, fat: 0 },
+        { name: 'Calabacín', quantity: '150g', calories: 26, protein: 2, carbs: 5, fat: 0 },
+        { name: 'Salsa de soja', quantity: '15ml', calories: 10, protein: 2, carbs: 1, fat: 0 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['250g tofu', '3 tortillas', 'Frijoles', 'Aguacate', 'Especias mexicanas'] : ['250g pavo', '100g arroz', 'Pimientos', 'Calabacín', 'Salsa soja'], instructions: isVegetarian ? ['Marinar y cocinar tofu', 'Calentar tortillas', 'Montar tacos con todos los ingredientes'] : ['Cortar pavo en tiras', 'Saltear con verduras', 'Servir con arroz'], prep_time: 25 }
+    },
+    {
+      name: isVegetarian ? 'Ensalada de Garbanzos' : 'Salmón con Quinoa',
+      foods: isVegetarian ? [
+        { name: 'Garbanzos', quantity: '250g', calories: 350, protein: 19, carbs: 56, fat: 6 },
+        { name: 'Tomate', quantity: '150g', calories: 27, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Pepino', quantity: '100g', calories: 16, protein: 1, carbs: 4, fat: 0 },
+        { name: 'Cebolla roja', quantity: '50g', calories: 20, protein: 0, carbs: 5, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '20ml', calories: 180, protein: 0, carbs: 0, fat: 20 },
+        { name: 'Queso feta', quantity: '50g', calories: 130, protein: 7, carbs: 2, fat: 11 }
+      ] : [
+        { name: 'Salmón', quantity: '200g', calories: 400, protein: 40, carbs: 0, fat: 25 },
+        { name: 'Quinoa', quantity: '100g', calories: 350, protein: 13, carbs: 62, fat: 6 },
+        { name: 'Espárragos', quantity: '150g', calories: 30, protein: 4, carbs: 6, fat: 0 },
+        { name: 'Limón', quantity: '1 unidad', calories: 20, protein: 1, carbs: 6, fat: 0 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['250g garbanzos', 'Tomate', 'Pepino', 'Cebolla', 'Aceite', 'Feta'] : ['200g salmón', '100g quinoa', 'Espárragos', 'Limón', 'Eneldo'], instructions: isVegetarian ? ['Mezclar todos los ingredientes', 'Aliñar con aceite y limón'] : ['Hornear salmón 15 min a 200°C', 'Cocinar quinoa', 'Grillar espárragos'], prep_time: 25 }
+    },
+    {
+      name: isVegetarian ? 'Pasta con Verduras' : 'Pollo al Curry con Arroz',
+      foods: isVegetarian ? [
+        { name: hasGlutenAllergy ? 'Pasta de arroz' : 'Pasta integral', quantity: '120g', calories: 420, protein: 15, carbs: 80, fat: 3 },
+        { name: 'Calabacín', quantity: '150g', calories: 26, protein: 2, carbs: 5, fat: 0 },
+        { name: 'Berenjena', quantity: '150g', calories: 38, protein: 2, carbs: 9, fat: 0 },
+        { name: 'Tomate triturado', quantity: '200g', calories: 40, protein: 2, carbs: 8, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '20ml', calories: 180, protein: 0, carbs: 0, fat: 20 }
+      ] : [
+        { name: 'Muslos de pollo', quantity: '250g', calories: 300, protein: 45, carbs: 0, fat: 12 },
+        { name: 'Arroz basmati', quantity: '120g', calories: 420, protein: 8, carbs: 92, fat: 1 },
+        { name: 'Leche de coco light', quantity: '100ml', calories: 60, protein: 1, carbs: 2, fat: 6 },
+        { name: 'Verduras para curry', quantity: '150g', calories: 50, protein: 2, carbs: 10, fat: 0 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['120g pasta', 'Calabacín', 'Berenjena', 'Tomate', 'Aceite', 'Ajo'] : ['250g pollo', '120g arroz', 'Leche coco', 'Curry', 'Verduras'], instructions: isVegetarian ? ['Cocinar pasta', 'Saltear verduras', 'Mezclar con tomate'] : ['Saltear pollo con curry', 'Añadir leche coco y verduras', 'Servir con arroz'], prep_time: 30 }
+    },
+    {
+      name: isVegetarian ? 'Bowl Mexicano' : 'Atún con Ensalada',
+      foods: isVegetarian ? [
+        { name: 'Arroz integral', quantity: '100g', calories: 350, protein: 8, carbs: 73, fat: 3 },
+        { name: 'Frijoles negros', quantity: '150g', calories: 200, protein: 13, carbs: 35, fat: 1 },
+        { name: 'Maíz', quantity: '80g', calories: 86, protein: 3, carbs: 19, fat: 1 },
+        { name: 'Aguacate', quantity: '100g', calories: 160, protein: 2, carbs: 9, fat: 15 },
+        { name: 'Salsa', quantity: '50g', calories: 20, protein: 1, carbs: 4, fat: 0 }
+      ] : [
+        { name: 'Atún fresco', quantity: '200g', calories: 260, protein: 52, carbs: 0, fat: 5 },
+        { name: 'Lechuga variada', quantity: '150g', calories: 25, protein: 2, carbs: 4, fat: 0 },
+        { name: 'Tomate', quantity: '150g', calories: 27, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Huevo cocido', quantity: '2 unidades', calories: 140, protein: 12, carbs: 1, fat: 10 },
+        { name: 'Aceitunas', quantity: '30g', calories: 45, protein: 0, carbs: 1, fat: 5 },
+        { name: 'Aceite de oliva', quantity: '20ml', calories: 180, protein: 0, carbs: 0, fat: 20 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['100g arroz', 'Frijoles', 'Maíz', 'Aguacate', 'Salsa', 'Lima'] : ['200g atún', 'Lechuga', 'Tomate', '2 huevos', 'Aceitunas', 'Aceite'], instructions: isVegetarian ? ['Cocinar arroz', 'Montar bowl con ingredientes', 'Aliñar con lima'] : ['Sellar atún por fuera', 'Preparar ensalada', 'Añadir huevos y aceitunas'], prep_time: 20 }
+    },
+    {
+      name: isVegetarian ? 'Wok de Tempeh' : 'Cerdo con Verduras al Wok',
+      foods: isVegetarian ? [
+        { name: 'Tempeh', quantity: '200g', calories: 340, protein: 40, carbs: 8, fat: 18 },
+        { name: 'Fideos de arroz', quantity: '100g', calories: 350, protein: 3, carbs: 83, fat: 0 },
+        { name: 'Verduras asiáticas', quantity: '200g', calories: 50, protein: 3, carbs: 10, fat: 0 },
+        { name: 'Salsa de soja', quantity: '20ml', calories: 15, protein: 2, carbs: 1, fat: 0 },
+        { name: 'Aceite de sésamo', quantity: '10ml', calories: 90, protein: 0, carbs: 0, fat: 10 }
+      ] : [
+        { name: 'Solomillo de cerdo', quantity: '200g', calories: 260, protein: 46, carbs: 0, fat: 8 },
+        { name: 'Arroz integral', quantity: '100g', calories: 350, protein: 8, carbs: 73, fat: 3 },
+        { name: 'Verduras wok', quantity: '250g', calories: 65, protein: 4, carbs: 13, fat: 0 },
+        { name: 'Salsa teriyaki', quantity: '30ml', calories: 45, protein: 1, carbs: 10, fat: 0 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['200g tempeh', '100g fideos', 'Verduras', 'Soja', 'Sésamo', 'Jengibre'] : ['200g cerdo', '100g arroz', 'Verduras', 'Teriyaki', 'Ajo'], instructions: isVegetarian ? ['Saltear tempeh', 'Cocinar fideos', 'Añadir verduras y salsas'] : ['Cortar cerdo en tiras', 'Saltear con verduras', 'Añadir salsa teriyaki', 'Servir con arroz'], prep_time: 25 }
+    }
+  ];
+
+  // CENAS VARIADAS (7 opciones)
+  const dinners = [
+    {
+      name: isVegetarian ? 'Revuelto de Tofu con Verduras' : 'Salmón al Horno',
+      foods: isVegetarian ? [
+        { name: 'Tofu sedoso', quantity: '200g', calories: 110, protein: 10, carbs: 3, fat: 6 },
+        { name: 'Espinacas', quantity: '150g', calories: 35, protein: 4, carbs: 5, fat: 0 },
+        { name: 'Champiñones', quantity: '150g', calories: 33, protein: 5, carbs: 5, fat: 0 },
+        { name: 'Pimiento', quantity: '100g', calories: 30, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Patata cocida', quantity: '200g', calories: 170, protein: 4, carbs: 38, fat: 0 }
+      ] : [
+        { name: 'Salmón', quantity: '200g', calories: 400, protein: 40, carbs: 0, fat: 25 },
+        { name: 'Patata al horno', quantity: '200g', calories: 170, protein: 4, carbs: 38, fat: 0 },
+        { name: 'Espárragos', quantity: '150g', calories: 30, protein: 4, carbs: 6, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '15ml', calories: 135, protein: 0, carbs: 0, fat: 15 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['200g tofu', 'Espinacas', 'Champiñones', 'Pimiento', 'Patata', 'Ajo'] : ['200g salmón', '200g patata', 'Espárragos', 'Limón', 'Eneldo'], instructions: isVegetarian ? ['Saltear verduras', 'Añadir tofu desmenuzado', 'Servir con patata'] : ['Hornear salmón 18 min a 200°C', 'Asar patata y espárragos'], prep_time: 25 }
+    },
+    {
+      name: isVegetarian ? 'Hamburguesa de Legumbres' : 'Pechuga de Pollo con Verduras',
+      foods: isVegetarian ? [
+        { name: 'Hamburguesa de lentejas', quantity: '2 unidades', calories: 300, protein: 20, carbs: 40, fat: 8 },
+        { name: 'Pan de hamburguesa integral', quantity: '1 unidad', calories: 150, protein: 5, carbs: 28, fat: 2 },
+        { name: 'Boniato frito', quantity: '150g', calories: 200, protein: 2, carbs: 45, fat: 3 },
+        { name: 'Ensalada verde', quantity: '100g', calories: 20, protein: 2, carbs: 3, fat: 0 }
+      ] : [
+        { name: 'Pechuga de pollo', quantity: '200g', calories: 220, protein: 44, carbs: 0, fat: 3 },
+        { name: 'Boniato al horno', quantity: '200g', calories: 180, protein: 3, carbs: 41, fat: 0 },
+        { name: 'Brócoli', quantity: '200g', calories: 68, protein: 6, carbs: 14, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '15ml', calories: 135, protein: 0, carbs: 0, fat: 15 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['2 hamburguesas lentejas', 'Pan', 'Boniato', 'Lechuga', 'Tomate'] : ['200g pollo', '200g boniato', 'Brócoli', 'Aceite', 'Hierbas'], instructions: isVegetarian ? ['Cocinar hamburguesas', 'Hornear boniato', 'Montar con ensalada'] : ['Grillar pollo', 'Hornear boniato 35 min', 'Vapor brócoli'], prep_time: 30 }
+    },
+    {
+      name: isVegetarian ? 'Ensalada César Vegana' : 'Lubina al Horno',
+      foods: isVegetarian ? [
+        { name: 'Tofu marinado', quantity: '150g', calories: 135, protein: 15, carbs: 4, fat: 7 },
+        { name: 'Lechuga romana', quantity: '200g', calories: 34, protein: 2, carbs: 6, fat: 0 },
+        { name: 'Picatostes integrales', quantity: '40g', calories: 160, protein: 4, carbs: 28, fat: 4 },
+        { name: 'Salsa césar vegana', quantity: '30ml', calories: 90, protein: 1, carbs: 2, fat: 9 },
+        { name: 'Aguacate', quantity: '80g', calories: 130, protein: 2, carbs: 7, fat: 12 }
+      ] : [
+        { name: 'Lubina', quantity: '200g', calories: 200, protein: 38, carbs: 0, fat: 5 },
+        { name: 'Patatas baby', quantity: '200g', calories: 170, protein: 4, carbs: 38, fat: 0 },
+        { name: 'Tomate cherry', quantity: '150g', calories: 27, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '20ml', calories: 180, protein: 0, carbs: 0, fat: 20 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['150g tofu', 'Lechuga', 'Picatostes', 'Salsa', 'Aguacate'] : ['200g lubina', 'Patatas', 'Tomates', 'Aceite', 'Hierbas'], instructions: isVegetarian ? ['Marinar y dorar tofu', 'Mezclar con lechuga', 'Añadir salsa y picatostes'] : ['Hornear lubina con patatas 25 min', 'Añadir tomates al final'], prep_time: 30 }
+    },
+    {
+      name: isVegetarian ? 'Crema de Calabaza con Garbanzos' : 'Merluza con Pisto',
+      foods: isVegetarian ? [
+        { name: 'Calabaza', quantity: '300g', calories: 78, protein: 3, carbs: 18, fat: 0 },
+        { name: 'Garbanzos', quantity: '150g', calories: 210, protein: 11, carbs: 34, fat: 3 },
+        { name: 'Leche de coco', quantity: '100ml', calories: 180, protein: 2, carbs: 3, fat: 18 },
+        { name: 'Pan integral tostado', quantity: '2 rebanadas', calories: 160, protein: 6, carbs: 28, fat: 2 }
+      ] : [
+        { name: 'Merluza', quantity: '200g', calories: 180, protein: 36, carbs: 0, fat: 3 },
+        { name: 'Pimiento rojo', quantity: '100g', calories: 30, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Calabacín', quantity: '150g', calories: 26, protein: 2, carbs: 5, fat: 0 },
+        { name: 'Berenjena', quantity: '150g', calories: 38, protein: 2, carbs: 9, fat: 0 },
+        { name: 'Tomate', quantity: '200g', calories: 36, protein: 2, carbs: 8, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '20ml', calories: 180, protein: 0, carbs: 0, fat: 20 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['300g calabaza', '150g garbanzos', 'Leche coco', 'Pan', 'Curry'] : ['200g merluza', 'Pimiento', 'Calabacín', 'Berenjena', 'Tomate', 'Aceite'], instructions: isVegetarian ? ['Hervir y triturar calabaza', 'Añadir garbanzos y coco', 'Servir con tostadas'] : ['Preparar pisto con verduras', 'Hornear merluza', 'Servir sobre el pisto'], prep_time: 35 }
+    },
+    {
+      name: isVegetarian ? 'Pizza Casera Vegetal' : 'Tacos de Pollo',
+      foods: isVegetarian ? [
+        { name: 'Masa de pizza integral', quantity: '1 base', calories: 350, protein: 10, carbs: 65, fat: 6 },
+        { name: 'Tomate triturado', quantity: '100g', calories: 20, protein: 1, carbs: 4, fat: 0 },
+        { name: 'Mozzarella vegana', quantity: '80g', calories: 200, protein: 4, carbs: 8, fat: 16 },
+        { name: 'Champiñones', quantity: '100g', calories: 22, protein: 3, carbs: 3, fat: 0 },
+        { name: 'Pimiento', quantity: '80g', calories: 25, protein: 1, carbs: 5, fat: 0 },
+        { name: 'Aceitunas', quantity: '30g', calories: 45, protein: 0, carbs: 1, fat: 5 }
+      ] : [
+        { name: 'Pollo desmenuzado', quantity: '200g', calories: 220, protein: 44, carbs: 0, fat: 3 },
+        { name: 'Tortillas de maíz', quantity: '3 unidades', calories: 210, protein: 6, carbs: 42, fat: 3 },
+        { name: 'Aguacate', quantity: '100g', calories: 160, protein: 2, carbs: 9, fat: 15 },
+        { name: 'Pico de gallo', quantity: '80g', calories: 16, protein: 1, carbs: 3, fat: 0 },
+        { name: 'Queso rallado', quantity: '30g', calories: 120, protein: 8, carbs: 1, fat: 10 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['1 base pizza', 'Tomate', 'Mozzarella vegana', 'Champiñones', 'Pimiento', 'Aceitunas'] : ['200g pollo', '3 tortillas', 'Aguacate', 'Pico de gallo', 'Queso', 'Lima'], instructions: isVegetarian ? ['Extender tomate en base', 'Añadir ingredientes', 'Hornear 15 min a 220°C'] : ['Cocinar y desmenuzar pollo', 'Calentar tortillas', 'Montar tacos'], prep_time: 25 }
+    },
+    {
+      name: isVegetarian ? 'Tortilla de Patatas Vegana' : 'Dorada con Ensalada',
+      foods: isVegetarian ? [
+        { name: 'Patata', quantity: '300g', calories: 255, protein: 6, carbs: 57, fat: 0 },
+        { name: 'Harina de garbanzo', quantity: '60g', calories: 210, protein: 13, carbs: 35, fat: 4 },
+        { name: 'Cebolla', quantity: '100g', calories: 40, protein: 1, carbs: 9, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '30ml', calories: 270, protein: 0, carbs: 0, fat: 30 },
+        { name: 'Ensalada', quantity: '100g', calories: 20, protein: 2, carbs: 3, fat: 0 }
+      ] : [
+        { name: 'Dorada', quantity: '200g', calories: 180, protein: 38, carbs: 0, fat: 3 },
+        { name: 'Lechuga variada', quantity: '150g', calories: 25, protein: 2, carbs: 4, fat: 0 },
+        { name: 'Tomate', quantity: '150g', calories: 27, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Pepino', quantity: '100g', calories: 16, protein: 1, carbs: 4, fat: 0 },
+        { name: 'Aceite de oliva', quantity: '20ml', calories: 180, protein: 0, carbs: 0, fat: 20 },
+        { name: 'Pan integral', quantity: '1 rebanada', calories: 80, protein: 3, carbs: 14, fat: 1 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['300g patata', '60g harina garbanzo', 'Cebolla', 'Aceite', 'Agua'] : ['200g dorada', 'Lechuga', 'Tomate', 'Pepino', 'Aceite', 'Pan'], instructions: isVegetarian ? ['Freír patata y cebolla', 'Mezclar con masa de garbanzo', 'Cuajar tortilla'] : ['Hornear dorada 20 min', 'Preparar ensalada', 'Aliñar con aceite y limón'], prep_time: 30 }
+    },
+    {
+      name: isVegetarian ? 'Pad Thai Vegano' : 'Ternera a la Plancha con Ensalada',
+      foods: isVegetarian ? [
+        { name: 'Fideos de arroz', quantity: '100g', calories: 350, protein: 3, carbs: 83, fat: 0 },
+        { name: 'Tofu', quantity: '150g', calories: 135, protein: 15, carbs: 4, fat: 7 },
+        { name: 'Brotes de soja', quantity: '100g', calories: 31, protein: 3, carbs: 6, fat: 0 },
+        { name: 'Cacahuetes', quantity: '30g', calories: 170, protein: 8, carbs: 5, fat: 14 },
+        { name: 'Salsa pad thai', quantity: '40ml', calories: 60, protein: 1, carbs: 12, fat: 1 }
+      ] : [
+        { name: 'Entrecot de ternera', quantity: '180g', calories: 252, protein: 45, carbs: 0, fat: 7 },
+        { name: 'Rúcula', quantity: '100g', calories: 25, protein: 3, carbs: 4, fat: 0 },
+        { name: 'Tomate', quantity: '150g', calories: 27, protein: 1, carbs: 6, fat: 0 },
+        { name: 'Parmesano', quantity: '20g', calories: 80, protein: 7, carbs: 1, fat: 6 },
+        { name: 'Aceite de oliva', quantity: '15ml', calories: 135, protein: 0, carbs: 0, fat: 15 }
+      ],
+      recipe: { ingredients: isVegetarian ? ['100g fideos', '150g tofu', 'Brotes soja', 'Cacahuetes', 'Salsa', 'Lima'] : ['180g ternera', 'Rúcula', 'Tomate', 'Parmesano', 'Aceite', 'Limón'], instructions: isVegetarian ? ['Cocinar fideos', 'Saltear tofu', 'Mezclar todo con salsa'] : ['Grillar ternera al punto', 'Preparar ensalada', 'Añadir láminas de parmesano'], prep_time: 25 }
+    }
+  ];
+
+  // SNACKS VARIADOS (7 opciones)
+  const snacks = [
+    { name: 'Yogur Griego con Frutos Secos', foods: [{ name: 'Yogur griego', quantity: '200g', calories: 130, protein: 20, carbs: 8, fat: 2 }, { name: 'Nueces', quantity: '30g', calories: 200, protein: 5, carbs: 4, fat: 19 }] },
+    { name: 'Batido de Proteína', foods: [{ name: 'Proteína whey', quantity: '30g', calories: 120, protein: 24, carbs: 3, fat: 1 }, { name: 'Plátano', quantity: '1 unidad', calories: 105, protein: 1, carbs: 27, fat: 0 }, { name: 'Leche', quantity: '250ml', calories: 125, protein: 8, carbs: 12, fat: 5 }] },
+    { name: 'Tostada con Aguacate', foods: [{ name: 'Pan integral', quantity: '2 rebanadas', calories: 160, protein: 6, carbs: 28, fat: 2 }, { name: 'Aguacate', quantity: '100g', calories: 160, protein: 2, carbs: 9, fat: 15 }] },
+    { name: 'Mix de Frutos Secos y Frutas', foods: [{ name: 'Almendras', quantity: '25g', calories: 150, protein: 5, carbs: 3, fat: 13 }, { name: 'Pasas', quantity: '25g', calories: 75, protein: 1, carbs: 20, fat: 0 }, { name: 'Manzana', quantity: '1 unidad', calories: 80, protein: 0, carbs: 21, fat: 0 }] },
+    { name: 'Queso Cottage con Frutas', foods: [{ name: 'Queso cottage', quantity: '200g', calories: 160, protein: 24, carbs: 6, fat: 4 }, { name: 'Piña', quantity: '100g', calories: 50, protein: 1, carbs: 13, fat: 0 }] },
+    { name: 'Hummus con Crudités', foods: [{ name: 'Hummus', quantity: '100g', calories: 180, protein: 8, carbs: 15, fat: 10 }, { name: 'Zanahoria', quantity: '150g', calories: 62, protein: 1, carbs: 14, fat: 0 }, { name: 'Pepino', quantity: '100g', calories: 16, protein: 1, carbs: 4, fat: 0 }] },
+    { name: 'Tortitas de Arroz con Crema de Cacahuete', foods: [{ name: 'Tortitas de arroz', quantity: '4 unidades', calories: 100, protein: 2, carbs: 22, fat: 1 }, { name: 'Crema de cacahuete', quantity: '30g', calories: 180, protein: 7, carbs: 6, fat: 15 }] }
+  ];
+
+  // Seleccionar comidas según el día
+  const breakfast = { ...breakfasts[dayIndex % breakfasts.length], meal_type: 'breakfast' as const, time_suggestion: '08:00', calories: breakfastCalories, protein: 30, carbs: 50, fat: 15 };
+  const lunch = { ...lunches[dayIndex % lunches.length], meal_type: 'lunch' as const, time_suggestion: '13:30', calories: lunchCalories, protein: 45, carbs: 60, fat: 18 };
+  const snack = { ...snacks[dayIndex % snacks.length], meal_type: 'snack' as const, time_suggestion: '17:00', calories: snackCalories, protein: 15, carbs: 25, fat: 12 };
+  const dinner = { ...dinners[dayIndex % dinners.length], meal_type: 'dinner' as const, time_suggestion: '21:00', calories: dinnerCalories, protein: 35, carbs: 40, fat: 15 };
   
+  const meals = [breakfast, lunch, snack, dinner];
   return meals.slice(0, mealsPerDay);
 }
 
 // Helper functions
-function calculateTDEE(goals: UserGoals): number {
+function calculateTDEE(goals: UserGoals, profileData?: UserProfileData): number {
   const weight = goals.current_weight || 70;
   const height = goals.height || 170;
   const age = goals.age || 30;
   
-  // Mifflin-St Jeor
+  // Mifflin-St Jeor (para hombres, ajustar -161 para mujeres)
   let bmr = 10 * weight + 6.25 * height - 5 * age + 5;
   
+  // Multiplicadores base de actividad
   const activityMultipliers = {
-    sedentary: 1.2,
-    light: 1.375,
-    moderate: 1.55,
-    active: 1.725,
-    very_active: 1.9
+    sedentary: 1.2,      // Oficina, sin ejercicio
+    light: 1.375,        // 1-2 días/semana
+    moderate: 1.55,      // 3-4 días/semana
+    active: 1.725,       // 5-6 días/semana
+    very_active: 1.9     // 6-7 días intenso
   };
   
   let tdee = bmr * activityMultipliers[goals.activity_level];
   
-  if (goals.primary === 'lose_weight') tdee -= 500;
-  if (goals.primary === 'gain_muscle') tdee += 300;
+  // Si hay datos de deportes específicos, calcular más precisamente
+  if (profileData?.sports_frequency) {
+    const sportsData = profileData.sports_frequency;
+    let weeklyExtraCalories = 0;
+    
+    // Calorías quemadas por hora según deporte (aproximado para 70kg)
+    const caloriesPerHour: Record<string, number> = {
+      gym: 400,
+      crossfit: 600,
+      running: 700,
+      swimming: 500,
+      cycling: 450,
+      yoga: 200,
+      other: 350
+    };
+    
+    // Calcular calorías extra semanales por cada deporte
+    Object.entries(sportsData).forEach(([sport, data]) => {
+      if (data && typeof data === 'object' && 'days' in data) {
+        const sportData = data as { days: number; duration?: number };
+        const daysPerWeek = sportData.days || 0;
+        const durationHours = (sportData.duration || 60) / 60;
+        const caloriesBurned = (caloriesPerHour[sport] || 350) * (weight / 70); // Ajustar por peso
+        weeklyExtraCalories += daysPerWeek * durationHours * caloriesBurned;
+      }
+    });
+    
+    // Añadir calorías extra diarias promedio
+    tdee += weeklyExtraCalories / 7;
+  }
   
-  return Math.round(tdee);
+  // Ajuste según objetivo
+  if (goals.primary === 'lose_weight') {
+    tdee -= 400; // Déficit moderado
+  } else if (goals.primary === 'gain_muscle') {
+    tdee += 400; // Superávit para ganar masa
+  }
+  
+  // Mínimo saludable
+  return Math.max(Math.round(tdee), 1500);
 }
 
 // Demo data functions

@@ -30,6 +30,16 @@ export interface UserProfileData {
   // Preferencias de entrenamiento
   preferred_workout_time?: 'morning' | 'afternoon' | 'evening' | 'flexible';
   workout_duration_preference?: number; // minutos
+  // Frecuencia por deporte (días por semana y duración)
+  sports_frequency?: {
+    [sport: string]: {
+      days: number;
+      duration?: number; // minutos por sesión
+      type?: 'class' | 'open'; // para CrossFit: clase o open box
+    };
+  };
+  // CrossFit específico
+  crossfit_wods?: WeeklyCrossfitWODs;
   // Alimentación
   diet_type?: 'omnivore' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo';
   allergies?: string[];
@@ -53,6 +63,15 @@ export interface UserProfileData {
   sleep_hours?: number;
   stress_level?: 'low' | 'medium' | 'high';
   water_intake?: number; // litros
+}
+
+// WODs de CrossFit semanales (para clases)
+export interface WeeklyCrossfitWODs {
+  [day: string]: {
+    strength?: string;
+    wod?: string;
+    notes?: string;
+  };
 }
 
 export type TrainingType = 
