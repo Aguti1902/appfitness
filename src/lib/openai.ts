@@ -540,52 +540,104 @@ export function generateDemoPlanFallback(
 ): GeneratedPlan {
   const calories = dailyCalories || calculateTDEE(goals);
   const isCrossfit = trainingTypes.includes('crossfit');
+  const isRunning = trainingTypes.includes('running');
+  const experience = profileData?.fitness_experience || 'intermediate';
+  const activityLevel = goals.activity_level || 'moderate';
   
   const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   
+  // Determinar días de descanso según nivel de actividad
+  // Para 5-6 días/semana: descanso el domingo (y miércoles opcional para 5 días)
+  // Para 3-4 días/semana: descanso domingo, martes, jueves o variantes
+  let restDays: number[] = [];
+  
+  if (activityLevel === 'very_active') {
+    // 6 días: solo domingo descanso
+    restDays = [0]; // Domingo
+  } else if (activityLevel === 'active') {
+    // 5 días: domingo y sábado descanso (fin de semana)
+    restDays = [0, 6]; // Domingo y Sábado
+  } else if (activityLevel === 'moderate') {
+    // 4 días: domingo, miércoles y sábado
+    restDays = [0, 3, 6];
+  } else {
+    // 3 días o menos
+    restDays = [0, 2, 4, 6];
+  }
+  
+  // Tipos de entrenamiento para la semana (Push/Pull/Legs x2 o variantes)
+  const getWorkoutSplit = () => {
+    if (isCrossfit) {
+      return [
+        { type: 'Fuerza + Metcon', focus: 'strength' },
+        { type: 'Cardio + Gimnásticos', focus: 'cardio' },
+        { type: 'Olímpicos + WOD', focus: 'olympic' },
+        { type: 'Resistencia + Core', focus: 'endurance' },
+        { type: 'Hero WOD', focus: 'hero' },
+        { type: 'Técnica + Fuerza', focus: 'technique' },
+      ];
+    }
+    
+    // Push/Pull/Legs (PPL) para gimnasio
+    return [
+      { type: 'Push (Pecho, Hombro, Tríceps)', focus: 'push' },
+      { type: 'Pull (Espalda, Bíceps)', focus: 'pull' },
+      { type: 'Piernas + Core', focus: 'legs' },
+      { type: 'Push (Hombro, Pecho, Tríceps)', focus: 'push2' },
+      { type: 'Pull (Espalda, Bíceps, Rear Delt)', focus: 'pull2' },
+      { type: 'Piernas + Glúteos', focus: 'legs2' },
+    ];
+  };
+  
+  const workoutSplit = getWorkoutSplit();
+  let workoutIndex = 0;
+  
   // Generar plan de entrenamiento
   const workoutDays = dayNames.map((dayName, index) => {
-    const isRestDay = index === 0 || index === 3; // Domingo y Miércoles descanso
+    const isRestDay = restDays.includes(index);
     
     if (isRestDay) {
       return {
         day: index,
         day_name: dayName,
         workout_type: 'gym' as TrainingType,
-        title: 'Día de Descanso Activo',
+        title: 'Descanso',
         duration_minutes: 0,
         is_rest_day: true,
         exercises: [],
-        notes: 'Descansa o haz actividad ligera como caminar o estiramientos.'
+        notes: index === 0 
+          ? 'Día de descanso completo o cardio suave (30 min caminata).' 
+          : 'Descanso activo: estiramientos, movilidad o paseo ligero.'
       };
     }
     
-    // Rotación de entrenamientos
-    const workoutTypes = isCrossfit 
-      ? ['Fuerza + WOD', 'Cardio + Técnica', 'Full Body', 'Gimnásticos + Metcon', 'Olímpicos']
-      : ['Pecho y Tríceps', 'Espalda y Bíceps', 'Piernas', 'Hombros y Core', 'Full Body'];
+    const workout = workoutSplit[workoutIndex % workoutSplit.length];
+    workoutIndex++;
     
-    const workoutIndex = [1, 2, 4, 5, 6].indexOf(index);
-    const workout = workoutTypes[workoutIndex] || 'Full Body';
+    const duration = profileData?.workout_duration_preference || (experience === 'advanced' ? 90 : experience === 'intermediate' ? 75 : 60);
     
     return {
       day: index,
       day_name: dayName,
       workout_type: isCrossfit ? 'crossfit' as TrainingType : 'gym' as TrainingType,
-      title: workout,
-      duration_minutes: profileData?.workout_duration_preference || 60,
+      title: workout.type,
+      duration_minutes: duration,
       is_rest_day: false,
-      exercises: generateDemoExercises(workout, isCrossfit, profileData?.injuries),
-      notes: `Entreno de ${workout.toLowerCase()}`
+      exercises: generateAdvancedExercises(workout.focus, experience, profileData?.injuries, isCrossfit, isRunning),
+      notes: getWorkoutNotes(workout.focus, experience)
     };
   });
   
   const workoutPlan: WeeklyWorkoutPlan = {
-    name: isCrossfit ? 'Plan CrossFit Personalizado' : 'Plan de Hipertrofia',
-    description: `Plan diseñado para ${getGoalText(goals.primary).toLowerCase()}`,
+    name: isCrossfit 
+      ? `Plan CrossFit ${experience === 'advanced' ? 'Avanzado' : experience === 'intermediate' ? 'Intermedio' : 'Iniciación'}`
+      : `Plan de Masa Muscular ${experience === 'advanced' ? 'Avanzado' : experience === 'intermediate' ? 'Intermedio' : 'Principiante'}`,
+    description: `Este plan está diseñado para ${getGoalText(goals.primary).toLowerCase()}, enfocándose en ${
+      isCrossfit ? 'mejorar tu rendimiento en todas las áreas del fitness' : 'un equilibrio entre hipertrofia y fuerza'
+    }${profileData?.injuries?.length ? `, adaptado a limitaciones de ${profileData.injuries.join(', ').toLowerCase()}` : ''}.`,
     days: workoutDays,
-    rest_days: [0, 3],
-    estimated_calories_burned_weekly: isCrossfit ? 3500 : 2500
+    rest_days: restDays,
+    estimated_calories_burned_weekly: isCrossfit ? 4000 : (experience === 'advanced' ? 3500 : 2800)
   };
   
   // Generar plan de dieta
@@ -621,74 +673,404 @@ export function generateDemoPlanFallback(
   };
 }
 
-function generateDemoExercises(workoutType: string, isCrossfit: boolean, injuries?: string[]): PlannedExercise[] {
+function generateAdvancedExercises(
+  focus: string, 
+  experience: string, 
+  injuries?: string[], 
+  isCrossfit?: boolean,
+  _isRunning?: boolean
+): PlannedExercise[] {
   const hasBackInjury = injuries?.some(i => i.toLowerCase().includes('espalda'));
   const hasKneeInjury = injuries?.some(i => i.toLowerCase().includes('rodilla'));
+  const hasShoulderInjury = injuries?.some(i => i.toLowerCase().includes('hombro'));
   
+  // Ajustar intensidad según experiencia
+  const getIntensity = () => {
+    if (experience === 'advanced') return { sets: 5, reps: '6-8', rest: 90, weight: '80-85% RM' };
+    if (experience === 'intermediate') return { sets: 4, reps: '8-10', rest: 75, weight: '70-75% RM' };
+    return { sets: 3, reps: '10-12', rest: 60, weight: '60-65% RM' };
+  };
+  
+  const intensity = getIntensity();
+  
+  // CrossFit
   if (isCrossfit) {
-    if (workoutType.includes('Fuerza')) {
-      return [
-        { name: 'Back Squat', sets: 5, reps: '5', weight_recommendation: '75% RM', rest_seconds: 120, alternatives: hasKneeInjury ? ['Leg Press', 'Goblet Squat'] : undefined },
-        { name: 'Strict Press', sets: 5, reps: '5', weight_recommendation: '70% RM', rest_seconds: 120 },
-        { name: 'WOD: 21-15-9', sets: 1, reps: 'Thrusters + Pull-ups', rest_seconds: 0, notes: 'Por tiempo' }
-      ];
-    }
-    return [
-      { name: 'EMOM 10 min', sets: 10, reps: '5 Power Clean', weight_recommendation: '60% RM', rest_seconds: 0 },
-      { name: 'AMRAP 15 min', sets: 1, reps: '12 Cal Row, 9 Burpees, 6 C2B', rest_seconds: 0 }
-    ];
+    return generateCrossfitWorkout(focus, experience, injuries);
   }
   
-  // Gimnasio tradicional
-  if (workoutType.includes('Pecho')) {
-    return [
-      { name: 'Press de Banca', sets: 4, reps: '8-10', weight_recommendation: '75% RM', rest_seconds: 90 },
-      { name: 'Press Inclinado Mancuernas', sets: 3, reps: '10-12', rest_seconds: 60 },
-      { name: 'Aperturas en Polea', sets: 3, reps: '12-15', rest_seconds: 60 },
-      { name: 'Fondos en Paralelas', sets: 3, reps: '10-12', rest_seconds: 60 },
-      { name: 'Press Francés', sets: 3, reps: '10-12', rest_seconds: 60 },
-      { name: 'Extensiones en Polea', sets: 3, reps: '12-15', rest_seconds: 45 }
-    ];
-  }
-  
-  if (workoutType.includes('Espalda')) {
+  // Push Day (Pecho, Hombro, Tríceps)
+  if (focus === 'push' || focus === 'push2') {
     const exercises: PlannedExercise[] = [
-      { name: 'Dominadas', sets: 4, reps: '8-10', rest_seconds: 90, alternatives: ['Jalón al Pecho'] },
-      { name: 'Remo con Barra', sets: 4, reps: '8-10', weight_recommendation: '70% RM', rest_seconds: 90 },
-      { name: 'Remo en Polea Baja', sets: 3, reps: '10-12', rest_seconds: 60 },
-      { name: 'Face Pulls', sets: 3, reps: '15', rest_seconds: 45 },
-      { name: 'Curl con Barra', sets: 3, reps: '10-12', rest_seconds: 60 },
-      { name: 'Curl Martillo', sets: 3, reps: '12', rest_seconds: 45 }
+      // Compuesto principal
+      { 
+        name: focus === 'push' ? 'Press de Banca con Barra' : 'Press Militar con Barra',
+        sets: intensity.sets, 
+        reps: intensity.reps, 
+        weight_recommendation: intensity.weight, 
+        rest_seconds: intensity.rest + 30,
+        notes: 'Controla la bajada 2-3 segundos, explosivo al subir',
+        alternatives: hasShoulderInjury ? ['Press en Máquina', 'Press con Mancuernas neutro'] : ['Press Inclinado', 'Press Declinado']
+      },
+      // Compuesto secundario
+      { 
+        name: focus === 'push' ? 'Press Inclinado con Mancuernas' : 'Press de Banca Inclinado',
+        sets: intensity.sets, 
+        reps: experience === 'advanced' ? '8-10' : '10-12', 
+        rest_seconds: intensity.rest,
+        notes: 'Ángulo de 30-45 grados',
+        alternatives: ['Press en Máquina Inclinada']
+      },
+      // Aislamiento pecho
+      { 
+        name: 'Aperturas en Polea (Cruce de Cables)',
+        sets: experience === 'advanced' ? 4 : 3, 
+        reps: '12-15', 
+        rest_seconds: 60,
+        notes: 'Contrae el pecho en el centro 1-2 segundos',
+        alternatives: ['Aperturas con Mancuernas', 'Pec Deck']
+      },
+      // Hombro lateral
+      { 
+        name: 'Elevaciones Laterales con Mancuernas',
+        sets: experience === 'advanced' ? 5 : 4, 
+        reps: experience === 'advanced' ? '12-15 + dropset' : '12-15', 
+        rest_seconds: 45,
+        notes: 'Codos ligeramente flexionados, no subir por encima del hombro',
+        alternatives: ['Elevaciones en Polea', 'Elevaciones en Máquina']
+      },
+      // Hombro frontal (si es push2)
+      ...(focus === 'push2' ? [{ 
+        name: 'Elevaciones Frontales Alternas',
+        sets: 3, 
+        reps: '10-12 cada brazo', 
+        rest_seconds: 45,
+        alternatives: ['Elevaciones Frontales con Disco']
+      }] : []),
+      // Fondos o press cerrado
+      { 
+        name: experience === 'advanced' ? 'Fondos en Paralelas (lastrados)' : 'Fondos en Paralelas',
+        sets: intensity.sets - 1, 
+        reps: experience === 'advanced' ? '8-10' : '10-15', 
+        rest_seconds: intensity.rest,
+        weight_recommendation: experience === 'advanced' ? '+10-20kg' : 'Peso corporal',
+        notes: 'Inclinación hacia adelante para pecho, vertical para tríceps',
+        alternatives: hasShoulderInjury ? ['Press Cerrado en Máquina'] : ['Fondos en Banco']
+      },
+      // Tríceps compuesto
+      { 
+        name: 'Press Francés con Barra Z',
+        sets: experience === 'advanced' ? 4 : 3, 
+        reps: '10-12', 
+        rest_seconds: 60,
+        notes: 'Bajar detrás de la cabeza para mayor estiramiento',
+        alternatives: ['Press Francés con Mancuernas', 'Rompecráneos']
+      },
+      // Tríceps aislamiento
+      { 
+        name: 'Extensiones de Tríceps en Polea (cuerda)',
+        sets: experience === 'advanced' ? 4 : 3, 
+        reps: experience === 'advanced' ? '12-15 + 8 parciales' : '12-15', 
+        rest_seconds: 45,
+        notes: 'Separa las cuerdas al final del movimiento',
+        alternatives: ['Extensiones con Barra V', 'Kickbacks']
+      },
+      // Finisher (solo avanzados)
+      ...(experience === 'advanced' ? [{ 
+        name: 'Flexiones hasta el fallo',
+        sets: 3, 
+        reps: 'Al fallo', 
+        rest_seconds: 60,
+        notes: 'Última serie: mantener isométrico 30 segundos al final'
+      }] : [])
     ];
-    if (hasBackInjury) {
-      exercises[1] = { name: 'Remo en Máquina', sets: 4, reps: '10-12', rest_seconds: 60 };
-    }
     return exercises;
   }
   
-  if (workoutType.includes('Piernas')) {
+  // Pull Day (Espalda, Bíceps)
+  if (focus === 'pull' || focus === 'pull2') {
     const exercises: PlannedExercise[] = [
-      { name: 'Sentadilla', sets: 4, reps: '8-10', weight_recommendation: '75% RM', rest_seconds: 120 },
-      { name: 'Prensa de Piernas', sets: 4, reps: '10-12', rest_seconds: 90 },
-      { name: 'Peso Muerto Rumano', sets: 3, reps: '10-12', rest_seconds: 90 },
-      { name: 'Extensiones de Cuádriceps', sets: 3, reps: '12-15', rest_seconds: 60 },
-      { name: 'Curl Femoral', sets: 3, reps: '12-15', rest_seconds: 60 },
-      { name: 'Elevaciones de Gemelos', sets: 4, reps: '15-20', rest_seconds: 45 }
+      // Compuesto principal
+      { 
+        name: focus === 'pull' ? 'Dominadas' : 'Remo con Barra',
+        sets: intensity.sets, 
+        reps: focus === 'pull' 
+          ? (experience === 'advanced' ? '8-12 lastradas' : '6-10') 
+          : intensity.reps,
+        weight_recommendation: focus === 'pull' 
+          ? (experience === 'advanced' ? '+10-15kg' : 'Peso corporal') 
+          : intensity.weight,
+        rest_seconds: intensity.rest + 30,
+        notes: focus === 'pull' ? 'Agarre supino para más bíceps, prono para espalda' : 'Torso a 45 grados, llevar barra al ombligo',
+        alternatives: hasBackInjury ? ['Jalón al Pecho', 'Remo en Máquina'] : ['Dominadas asistidas', 'Remo Pendlay']
+      },
+      // Compuesto secundario
+      { 
+        name: focus === 'pull' ? 'Remo con Mancuerna a una mano' : 'Jalón al Pecho agarre cerrado',
+        sets: intensity.sets, 
+        reps: focus === 'pull' ? '8-10 cada lado' : '10-12',
+        rest_seconds: intensity.rest,
+        notes: focus === 'pull' ? 'Apoyar rodilla y mano en banco' : 'Llevar la barra al pecho, no detrás',
+        alternatives: ['Remo en Polea', 'Jalón agarre neutro']
+      },
+      // Espalda alta / rear delt
+      { 
+        name: 'Face Pulls',
+        sets: experience === 'advanced' ? 5 : 4, 
+        reps: '15-20', 
+        rest_seconds: 45,
+        notes: 'Tira hacia la cara separando las manos, rotación externa',
+        alternatives: ['Pájaros con Mancuernas', 'Reverse Pec Deck']
+      },
+      // Remo adicional
+      { 
+        name: focus === 'pull' ? 'Remo en Polea Baja (agarre cerrado)' : 'Remo T-Bar',
+        sets: intensity.sets - 1, 
+        reps: '10-12',
+        rest_seconds: intensity.rest,
+        notes: 'Contrae los omóplatos al final del movimiento',
+        alternatives: hasBackInjury ? ['Remo en Máquina'] : ['Remo Meadows', 'Remo Seal']
+      },
+      // Pullover (espalda + pecho menor)
+      ...(experience !== 'beginner' ? [{ 
+        name: 'Pullover con Mancuerna',
+        sets: 3, 
+        reps: '12-15',
+        rest_seconds: 60,
+        notes: 'Gran estiramiento dorsal, codos ligeramente flexionados',
+        alternatives: ['Pullover en Polea']
+      }] : []),
+      // Encogimientos (solo pull2 o avanzados)
+      ...(focus === 'pull2' || experience === 'advanced' ? [{ 
+        name: 'Encogimientos con Barra (Trapecios)',
+        sets: 4, 
+        reps: '12-15',
+        weight_recommendation: 'Pesado',
+        rest_seconds: 60,
+        notes: 'Mantener arriba 2 segundos',
+        alternatives: ['Encogimientos con Mancuernas']
+      }] : []),
+      // Bíceps compuesto
+      { 
+        name: 'Curl con Barra Z',
+        sets: intensity.sets - 1, 
+        reps: '8-10',
+        rest_seconds: 60,
+        notes: experience === 'advanced' ? 'Última serie: 21s (7+7+7)' : 'Sin balanceo, codos fijos',
+        alternatives: ['Curl con Barra Recta', 'Curl con Mancuernas alterno']
+      },
+      // Bíceps pico
+      { 
+        name: 'Curl Martillo',
+        sets: experience === 'advanced' ? 4 : 3, 
+        reps: '10-12 cada brazo',
+        rest_seconds: 45,
+        notes: 'Trabaja braquial y braquiorradial',
+        alternatives: ['Curl en Banco Inclinado', 'Curl de Concentración']
+      },
+      // Bíceps aislamiento (avanzados)
+      ...(experience === 'advanced' ? [{ 
+        name: 'Curl en Polea (unilateral)',
+        sets: 3, 
+        reps: '12-15 + dropset',
+        rest_seconds: 30,
+        notes: 'Máxima contracción arriba'
+      }] : [])
     ];
-    if (hasKneeInjury) {
-      exercises[0] = { name: 'Sentadilla Goblet', sets: 4, reps: '12-15', rest_seconds: 90, notes: 'Peso moderado' };
-    }
+    return exercises;
+  }
+  
+  // Legs Day
+  if (focus === 'legs' || focus === 'legs2') {
+    const exercises: PlannedExercise[] = [
+      // Compuesto principal
+      { 
+        name: hasKneeInjury 
+          ? 'Prensa de Piernas' 
+          : (focus === 'legs' ? 'Sentadilla con Barra (Back Squat)' : 'Sentadilla Frontal'),
+        sets: intensity.sets, 
+        reps: hasKneeInjury ? '10-12' : intensity.reps,
+        weight_recommendation: hasKneeInjury ? 'Moderado' : intensity.weight,
+        rest_seconds: 120,
+        notes: hasKneeInjury 
+          ? 'Pies altos en la plataforma para menos estrés en rodillas' 
+          : 'Profundidad: al menos paralelo, espalda neutra',
+        alternatives: hasKneeInjury ? ['Sentadilla Goblet'] : ['Sentadilla Hack', 'Sentadilla Búlgara']
+      },
+      // Compuesto secundario
+      { 
+        name: focus === 'legs' ? 'Prensa de Piernas' : 'Sentadilla Hack',
+        sets: intensity.sets, 
+        reps: '10-12',
+        rest_seconds: 90,
+        notes: focus === 'legs' ? 'Pies separados para más aductores' : 'Buen compuesto para cuádriceps',
+        alternatives: ['Sentadilla Goblet', 'Zancadas con Barra']
+      },
+      // Isquiotibiales
+      { 
+        name: hasBackInjury ? 'Curl Femoral Tumbado' : 'Peso Muerto Rumano',
+        sets: intensity.sets, 
+        reps: hasBackInjury ? '12-15' : '8-10',
+        weight_recommendation: hasBackInjury ? 'Moderado' : intensity.weight,
+        rest_seconds: 90,
+        notes: hasBackInjury ? 'Contrae isquios al subir' : 'Ligera flexión de rodillas, sentir estiramiento',
+        alternatives: ['Peso Muerto con Piernas Rígidas', 'Good Mornings']
+      },
+      // Zancadas
+      { 
+        name: 'Zancadas Caminando con Mancuernas',
+        sets: 4, 
+        reps: '12 pasos cada pierna',
+        rest_seconds: 60,
+        notes: 'Rodilla trasera casi toca el suelo',
+        alternatives: hasKneeInjury ? ['Step-ups en banco bajo'] : ['Zancadas Inversas', 'Zancadas Búlgaras']
+      },
+      // Extensiones (cuádriceps aislamiento)
+      { 
+        name: 'Extensiones de Cuádriceps',
+        sets: experience === 'advanced' ? 5 : 4, 
+        reps: experience === 'advanced' ? '12-15 + dropset' : '12-15',
+        rest_seconds: 45,
+        notes: hasKneeInjury ? 'Rango parcial, sin bloquear' : 'Contrae arriba 2 segundos',
+        alternatives: ['Sissy Squats']
+      },
+      // Curl femoral
+      { 
+        name: 'Curl Femoral Sentado',
+        sets: experience === 'advanced' ? 5 : 4, 
+        reps: '10-12',
+        rest_seconds: 60,
+        notes: 'Fase excéntrica lenta (3-4 seg)',
+        alternatives: ['Curl Femoral Tumbado', 'Nordic Curl']
+      },
+      // Aductores (legs2)
+      ...(focus === 'legs2' ? [{ 
+        name: 'Aductores en Máquina',
+        sets: 3, 
+        reps: '15-20',
+        rest_seconds: 45,
+        notes: 'Contrae al cerrar las piernas'
+      }] : []),
+      // Glúteos (legs2)
+      ...(focus === 'legs2' ? [{ 
+        name: 'Hip Thrust con Barra',
+        sets: 4, 
+        reps: '10-12',
+        weight_recommendation: 'Pesado',
+        rest_seconds: 90,
+        notes: 'Aprieta glúteos arriba 2 segundos',
+        alternatives: ['Glute Bridge', 'Patada de Glúteo en Polea']
+      }] : []),
+      // Gemelos
+      { 
+        name: 'Elevaciones de Gemelos de Pie',
+        sets: experience === 'advanced' ? 6 : 5, 
+        reps: '15-20',
+        rest_seconds: 45,
+        notes: 'Estiramiento completo abajo, contracción máxima arriba',
+        alternatives: ['Gemelos en Prensa', 'Gemelos Sentado']
+      },
+      // Gemelos sentado (diferente ángulo)
+      { 
+        name: 'Gemelos Sentado',
+        sets: 4, 
+        reps: '15-20',
+        rest_seconds: 45,
+        notes: 'Trabaja más el sóleo'
+      },
+      // Core
+      { 
+        name: focus === 'legs' ? 'Plancha' : 'Rueda Abdominal',
+        sets: 3, 
+        reps: focus === 'legs' ? '45-60 seg' : '10-15',
+        rest_seconds: 45,
+        notes: 'Core activado, no arquear espalda',
+        alternatives: ['Crunch en Polea', 'Elevación de Piernas']
+      }
+    ];
     return exercises;
   }
   
   // Default: Full Body
   return [
-    { name: 'Sentadilla', sets: 3, reps: '10', weight_recommendation: '70% RM', rest_seconds: 90 },
-    { name: 'Press de Banca', sets: 3, reps: '10', weight_recommendation: '70% RM', rest_seconds: 90 },
-    { name: 'Remo con Barra', sets: 3, reps: '10', rest_seconds: 90 },
-    { name: 'Press Militar', sets: 3, reps: '10', rest_seconds: 60 },
-    { name: 'Peso Muerto', sets: 3, reps: '8', weight_recommendation: '70% RM', rest_seconds: 120 }
+    { name: 'Sentadilla con Barra', sets: 4, reps: '8-10', weight_recommendation: '70% RM', rest_seconds: 120 },
+    { name: 'Press de Banca', sets: 4, reps: '8-10', weight_recommendation: '70% RM', rest_seconds: 90 },
+    { name: 'Dominadas', sets: 4, reps: '8-10', rest_seconds: 90 },
+    { name: 'Press Militar', sets: 3, reps: '10-12', rest_seconds: 75 },
+    { name: 'Remo con Barra', sets: 4, reps: '8-10', rest_seconds: 90 },
+    { name: 'Curl con Barra', sets: 3, reps: '10-12', rest_seconds: 60 },
+    { name: 'Fondos en Paralelas', sets: 3, reps: '10-15', rest_seconds: 60 },
+    { name: 'Plancha', sets: 3, reps: '45-60 seg', rest_seconds: 45 }
   ];
+}
+
+function generateCrossfitWorkout(focus: string, _experience: string, injuries?: string[]): PlannedExercise[] {
+  const hasKneeInjury = injuries?.some(i => i.toLowerCase().includes('rodilla'));
+  const hasBackInjury = injuries?.some(i => i.toLowerCase().includes('espalda'));
+  
+  if (focus === 'strength') {
+    return [
+      { name: 'Back Squat', sets: 5, reps: '5', weight_recommendation: '75-80% RM', rest_seconds: 180, notes: '5x5 clásico, aumentar peso cada semana', alternatives: hasKneeInjury ? ['Front Squat con peso moderado'] : undefined },
+      { name: 'Strict Press', sets: 5, reps: '5', weight_recommendation: '70-75% RM', rest_seconds: 150, notes: 'Sin impulso de piernas' },
+      { name: 'Deadlift', sets: 5, reps: '3', weight_recommendation: '80-85% RM', rest_seconds: 180, notes: 'Técnica perfecta', alternatives: hasBackInjury ? ['Romanian Deadlift ligero'] : undefined },
+      { name: 'WOD: Fran (21-15-9)', sets: 1, reps: 'Thrusters (43/30kg) + Pull-ups', rest_seconds: 0, notes: 'Por tiempo. Escalar peso si necesario.' },
+      { name: 'Core: Toes to Bar', sets: 4, reps: '10-15', rest_seconds: 60, alternatives: ['Knees to Elbow', 'Sit-ups'] }
+    ];
+  }
+  
+  if (focus === 'cardio') {
+    return [
+      { name: 'Run 400m x 6', sets: 6, reps: '400m', rest_seconds: 90, notes: 'Mantener ritmo consistente' },
+      { name: 'EMOM 12 min', sets: 12, reps: 'Min 1: 15 Cal Row, Min 2: 12 Burpees, Min 3: 15 Box Jumps', rest_seconds: 0, notes: 'Transiciones rápidas' },
+      { name: 'Muscle-ups (o progresión)', sets: 5, reps: '3-5', rest_seconds: 120, notes: 'Chest to Bar si no tienes muscle-ups', alternatives: ['Pull-ups + Dips'] },
+      { name: 'Double Unders', sets: 4, reps: '50', rest_seconds: 60, notes: 'Singles x3 si no tienes DU', alternatives: ['Single Unders x150'] },
+      { name: 'AMRAP 8 min', sets: 1, reps: '12 Wall Balls + 6 C2B + 3 Muscle-ups', rest_seconds: 0, notes: 'Escalar según nivel' }
+    ];
+  }
+  
+  if (focus === 'olympic') {
+    return [
+      { name: 'Clean & Jerk', sets: 6, reps: '2', weight_recommendation: '70-80% RM', rest_seconds: 150, notes: 'Técnica primero, peso después' },
+      { name: 'Snatch', sets: 6, reps: '2', weight_recommendation: '65-75% RM', rest_seconds: 150, notes: 'Empezar con Hang Snatch si falta movilidad' },
+      { name: 'Front Squat', sets: 4, reps: '5', weight_recommendation: '75% RM', rest_seconds: 120, notes: 'Codos altos, core activado' },
+      { name: 'Push Press', sets: 4, reps: '5', weight_recommendation: '75% RM', rest_seconds: 90, notes: 'Dip corto, drive explosivo' },
+      { name: 'WOD: Grace', sets: 1, reps: '30 Clean & Jerk (61/43kg)', rest_seconds: 0, notes: 'Por tiempo. Sub 5 min = excelente' }
+    ];
+  }
+  
+  if (focus === 'hero') {
+    return [
+      { name: 'Calentamiento', sets: 1, reps: '800m Run + Movilidad', rest_seconds: 0, notes: '10-15 minutos' },
+      { name: 'Hero WOD "Murph"', sets: 1, reps: '1 Mile Run, 100 Pull-ups, 200 Push-ups, 300 Air Squats, 1 Mile Run', rest_seconds: 0, notes: 'Particionar 20 rondas de 5-10-15 si es necesario. Con o sin chaleco.' },
+      { name: 'Cooldown', sets: 1, reps: 'Estiramientos + Foam Roll', rest_seconds: 0, notes: '10-15 minutos de movilidad' }
+    ];
+  }
+  
+  // Default crossfit workout
+  return [
+    { name: 'Skill Work: Handstand', sets: 4, reps: '30 seg hold o 5 HSPU', rest_seconds: 90, notes: 'Practicar contra pared si necesario' },
+    { name: 'Back Squat', sets: 4, reps: '8', weight_recommendation: '70% RM', rest_seconds: 120 },
+    { name: 'AMRAP 15 min', sets: 1, reps: '15 KB Swings (24/16kg), 12 Box Jumps (24/20"), 9 Burpees', rest_seconds: 0, notes: 'Ritmo sostenible' },
+    { name: 'Accessory: GHD Sit-ups', sets: 3, reps: '15', rest_seconds: 60 },
+    { name: 'Accessory: Hip Extension', sets: 3, reps: '15', rest_seconds: 60 }
+  ];
+}
+
+function getWorkoutNotes(focus: string, experience: string): string {
+  const notes: Record<string, string> = {
+    push: `Día de empuje. ${experience === 'advanced' ? 'Incluye técnicas de intensidad avanzadas.' : 'Enfócate en la conexión mente-músculo.'}`,
+    push2: `Segundo día de empuje con énfasis en hombros. ${experience === 'advanced' ? 'Volumen alto para deltoides.' : 'Cuida la técnica en press militar.'}`,
+    pull: `Día de tirón. ${experience === 'advanced' ? 'Dominadas lastradas y técnicas de alta intensidad.' : 'Prioriza dominadas y remos compuestos.'}`,
+    pull2: `Segundo día de tirón con énfasis en espalda alta y trapecios. ${experience === 'advanced' ? 'Incluye trabajo de rear delt.' : ''}`,
+    legs: `Día de piernas con énfasis en cuádriceps. ${experience === 'advanced' ? 'Sentadilla pesada + volumen.' : 'Técnica correcta en sentadilla.'}`,
+    legs2: `Día de piernas con énfasis en glúteos e isquios. ${experience === 'advanced' ? 'Hip thrust pesado + isquios.' : ''}`,
+    strength: 'Día de fuerza con levantamientos principales. Descansos largos.',
+    cardio: 'Día de cardio y habilidades gimnásticas. Alta intensidad.',
+    olympic: 'Día de levantamientos olímpicos. Técnica y potencia.',
+    hero: 'Hero WOD. Prepárate mental y físicamente.',
+    endurance: 'Trabajo de resistencia. Ritmo sostenido.',
+    technique: 'Enfoque en técnica. Peso moderado, ejecución perfecta.'
+  };
+  return notes[focus] || 'Entreno completo.';
 }
 
 function generateDemoMeals(dailyCalories: number, profileData?: UserProfileData) {
