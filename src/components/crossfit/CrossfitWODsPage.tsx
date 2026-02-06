@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { 
   Flame, 
-  Plus, 
   Save, 
   Trash2, 
   Calendar,
