@@ -70,7 +70,7 @@ const DEMO_WORKOUTS: Workout[] = [
   {
     id: '2',
     user_id: 'demo-user-id',
-    type: 'crossfit',
+    type: 'gym',
     workout_date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
     duration_minutes: 60,
     exercises: [
@@ -85,14 +85,15 @@ const DEMO_WORKOUTS: Workout[] = [
       },
       {
         id: 'e5',
-        name: 'WOD: AMRAP 15min',
+        name: 'Peso muerto',
         sets: [
-          { reps: 8, completed: true, time_seconds: 900 }
-        ],
-        notes: '8 rondas + 5 wall balls'
+          { reps: 5, weight: 120, completed: true },
+          { reps: 5, weight: 120, completed: true },
+          { reps: 5, weight: 120, completed: true }
+        ]
       }
     ],
-    notes: 'WOD intenso, 8 rondas completas',
+    notes: 'Día de pierna y espalda baja',
     created_at: new Date(Date.now() - 86400000).toISOString()
   },
   {
@@ -151,17 +152,29 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     }
 
     try {
-      const { data, error } = await supabase
+      // Timeout de 5 segundos
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) => 
+        setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 5000)
+      );
+      
+      const fetchPromise = supabase
         .from('workouts')
         .select('*')
         .eq('user_id', userId)
         .order('workout_date', { ascending: false });
 
-      if (error) throw error;
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+
+      if (error) {
+        console.warn('Error fetching workouts:', error);
+        set({ workouts: [], isLoading: false });
+        return;
+      }
+      
       set({ workouts: data || [], isLoading: false });
     } catch (error) {
       console.error('Error fetching workouts:', error);
-      set({ isLoading: false });
+      set({ workouts: [], isLoading: false });
     }
   },
 
