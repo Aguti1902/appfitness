@@ -97,10 +97,23 @@ function AppContent() {
           setInitialLoading(false);
         }
 
-        // Redirigir al onboarding si viene de OAuth
+        // Redirigir después de OAuth - verificar si ya completó onboarding
         if (event === 'SIGNED_IN' && session?.user) {
           if (window.location.hash.includes('access_token') || window.location.pathname === '/auth/callback') {
-            window.location.href = '/onboarding';
+            // Verificar si ya completó onboarding
+            const hasCompletedOnboarding = userData?.training_types && 
+              Array.isArray(userData.training_types) && 
+              userData.training_types.length > 0;
+            
+            console.log('OAuth redirect - hasCompletedOnboarding:', hasCompletedOnboarding);
+            
+            if (hasCompletedOnboarding) {
+              // Ya completó onboarding, ir al dashboard
+              window.location.href = '/';
+            } else {
+              // Necesita completar onboarding
+              window.location.href = '/onboarding';
+            }
           }
         }
       }
@@ -159,7 +172,7 @@ function AppContent() {
       } />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/ai-processing" element={<AIProcessingPage />} />
-      <Route path="/auth/callback" element={<OnboardingPage />} />
+      <Route path="/auth/callback" element={<Navigate to="/" replace />} />
 
       {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
