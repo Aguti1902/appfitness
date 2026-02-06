@@ -899,7 +899,8 @@ function getGymWorkoutNotes(focus: string, experience: string): string {
   return notes[focus] || 'Mantén buena técnica y controla el movimiento.';
 }
 
-function generateAdvancedExercises(
+// Función legacy - mantenida por compatibilidad futura
+function _generateAdvancedExercises(
   focus: string, 
   experience: string, 
   injuries?: string[], 
@@ -1224,7 +1225,8 @@ function generateAdvancedExercises(
   ];
 }
 
-function generateCrossfitWorkout(focus: string, _experience: string, injuries?: string[]): PlannedExercise[] {
+// Función legacy - mantenida por compatibilidad futura  
+function _generateCrossfitWorkout(focus: string, _experience: string, injuries?: string[]): PlannedExercise[] {
   const hasKneeInjury = injuries?.some(i => i.toLowerCase().includes('rodilla'));
   const hasBackInjury = injuries?.some(i => i.toLowerCase().includes('espalda'));
   
@@ -1276,7 +1278,8 @@ function generateCrossfitWorkout(focus: string, _experience: string, injuries?: 
   ];
 }
 
-function getWorkoutNotes(focus: string, experience: string): string {
+// Función legacy - mantenida por compatibilidad futura
+function _getWorkoutNotes(focus: string, experience: string): string {
   const notes: Record<string, string> = {
     push: `Día de empuje. ${experience === 'advanced' ? 'Incluye técnicas de intensidad avanzadas.' : 'Enfócate en la conexión mente-músculo.'}`,
     push2: `Segundo día de empuje con énfasis en hombros. ${experience === 'advanced' ? 'Volumen alto para deltoides.' : 'Cuida la técnica en press militar.'}`,
