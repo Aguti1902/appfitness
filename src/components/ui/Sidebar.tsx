@@ -10,7 +10,8 @@ import {
   Bot,
   Settings,
   Menu,
-  X
+  X,
+  Target
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
   { to: '/workouts', icon: Dumbbell, label: 'Entrenamientos' },
   { to: '/nutrition', icon: Utensils, label: 'Nutrición' },
+  { to: '/goals', icon: Target, label: 'Objetivos' },
   { to: '/progress', icon: TrendingUp, label: 'Progreso' },
   { to: '/social', icon: Users, label: 'Amigos' },
   { to: '/schedule', icon: Calendar, label: 'Horarios' },
