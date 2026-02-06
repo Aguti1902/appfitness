@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { requestNotificationPermission } from '../../lib/notifications';
-import { generateCompletePlan } from '../../lib/openai';
+import { generateCompletePlan, generateDemoPlanFallback } from '../../lib/openai';
 import type { UserGoals, TrainingType } from '../../types';
 
 export function SettingsPage() {
@@ -85,26 +85,36 @@ export function SettingsPage() {
     setIsRegenerating(true);
     setRegenerateSuccess(false);
     
+    const userGoals = user?.goals || goals;
+    const userTrainingTypes = user?.training_types || trainingTypes;
+    const profileData = user?.profile_data;
+    
+    console.log('Regenerating plan with:', { userGoals, userTrainingTypes, profileData });
+    
+    let newPlan;
+    
     try {
-      const userGoals = user?.goals || goals;
-      const userTrainingTypes = user?.training_types || trainingTypes;
-      const profileData = user?.profile_data;
+      // Timeout de 10 segundos
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 10000)
+      );
       
-      console.log('Regenerating plan with:', { userGoals, userTrainingTypes, profileData });
-      
-      const newPlan = await generateCompletePlan(userGoals, userTrainingTypes, profileData);
-      
-      // Guardar en localStorage
-      localStorage.setItem('fitapp-generated-plan', JSON.stringify(newPlan));
-      
-      setRegenerateSuccess(true);
-      setTimeout(() => setRegenerateSuccess(false), 3000);
+      newPlan = await Promise.race([
+        generateCompletePlan(userGoals, userTrainingTypes, profileData),
+        timeoutPromise
+      ]);
     } catch (error) {
-      console.error('Error regenerating plan:', error);
-      alert('Error al regenerar el plan. Por favor, inténtalo de nuevo.');
-    } finally {
-      setIsRegenerating(false);
+      console.warn('Error/timeout generating plan, using demo:', error);
+      // Usar plan de demo si falla o hay timeout
+      newPlan = generateDemoPlanFallback(userGoals, userTrainingTypes, profileData);
     }
+    
+    // Guardar en localStorage
+    localStorage.setItem('fitapp-generated-plan', JSON.stringify(newPlan));
+    
+    setRegenerateSuccess(true);
+    setIsRegenerating(false);
+    setTimeout(() => setRegenerateSuccess(false), 3000);
   };
 
   const handleClearPlan = () => {
