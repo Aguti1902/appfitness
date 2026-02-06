@@ -76,10 +76,10 @@ export const useAuthStore = create<AuthState>()(
           }
 
           if (data.user) {
-            // Get profile - usar maybeSingle para evitar errores si no existe
+            // Get profile
             const { data: profile, error: profileError } = await supabase
               .from('profiles')
-              .select('*')
+              .select('id, email, name, avatar_url, goals, training_types')
               .eq('id', data.user.id)
               .maybeSingle();
 
@@ -87,28 +87,26 @@ export const useAuthStore = create<AuthState>()(
               console.error('Error fetching profile on login:', profileError);
             }
 
-            console.log('Login - Profile loaded:', profile ? {
-              hasGoals: !!profile.goals,
-              trainingTypes: profile.training_types,
-              hasPlan: !!profile.generated_plan
-            } : 'NO PROFILE');
+            console.log('=== LOGIN - PROFILE LOADED ===');
+            console.log('Profile exists:', !!profile);
+            console.log('Training types:', profile?.training_types);
+
+            // Extraer profile_data de dentro de goals
+            const goalsData = profile?.goals || {};
+            const profileData = goalsData.profile_data || null;
+            const cleanGoals = { ...goalsData };
+            delete cleanGoals.profile_data;
 
             const user: User = {
               id: data.user.id,
               email: data.user.email!,
               name: profile?.name || data.user.email!.split('@')[0],
               avatar_url: profile?.avatar_url,
-              goals: profile?.goals || { primary: 'maintain', activity_level: 'moderate' },
+              goals: Object.keys(cleanGoals).length > 0 ? cleanGoals : { primary: 'maintain', activity_level: 'moderate' },
               training_types: profile?.training_types || [],
-              profile_data: profile?.profile_data,
+              profile_data: profileData,
               created_at: data.user.created_at
             };
-
-            // Si hay plan generado en Supabase, sincronizarlo con localStorage
-            if (profile?.generated_plan) {
-              console.log('✅ Login: Loading generated plan from Supabase');
-              localStorage.setItem('fitapp-generated-plan', JSON.stringify(profile.generated_plan));
-            }
 
             set({ user, isAuthenticated: true, isLoading: false });
           }

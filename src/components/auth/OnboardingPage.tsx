@@ -256,62 +256,80 @@ export function OnboardingPage() {
       }
     }
 
-    // Guardar en Supabase si tenemos userId (con timeout de 8 segundos)
+    // Guardar en Supabase si tenemos userId
     if (userId) {
-      console.log('Saving to Supabase for user:', userId);
+      console.log('=== SAVING TO SUPABASE ===');
+      console.log('User ID:', userId);
+      console.log('Training types:', trainingTypes);
       
       // Obtener email del usuario actual
-      const userEmail = user?.email || (await supabase.auth.getSession()).data?.session?.user?.email;
+      const sessionData = await supabase.auth.getSession();
+      const userEmail = user?.email || sessionData.data?.session?.user?.email;
       
-      const saveToSupabase = async () => {
-        // Usar UPSERT para garantizar que los datos se guarden aunque el perfil no exista
-        const { error } = await supabase
-          .from('profiles')
-          .upsert({
-            id: userId,
-            email: userEmail,
-            name: user?.name || userEmail?.split('@')[0] || 'Usuario',
-            goals,
-            training_types: trainingTypes,
-            profile_data: profileData,
-            updated_at: new Date().toISOString()
-          }, { 
-            onConflict: 'id',
-            ignoreDuplicates: false 
-          });
-        return error;
+      // Combinar goals con profile_data en un solo objeto JSONB
+      // (la tabla profiles solo tiene columna 'goals' como JSONB)
+      const combinedGoals = {
+        ...goals,
+        profile_data: profileData // Guardar profile_data dentro de goals
       };
-
-      const timeoutPromise = new Promise<string>((resolve) => 
-        setTimeout(() => resolve('TIMEOUT'), 8000)
-      );
-
+      
       try {
-        const result = await Promise.race([saveToSupabase(), timeoutPromise]);
-        if (result === 'TIMEOUT') {
-          console.warn('Supabase save timed out after 8s - continuing anyway');
-        } else if (result) {
-          console.error('Supabase error:', result);
-          // Intentar un segundo intento con update simple
-          console.log('Retrying with simple update...');
-          try {
-            await supabase
-              .from('profiles')
-              .update({ goals, training_types: trainingTypes, profile_data: profileData })
-              .eq('id', userId);
-            console.log('Retry update successful');
-          } catch (retryErr) {
-            console.error('Retry also failed:', retryErr);
+        // Primero intentar UPDATE (más común)
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            goals: combinedGoals,
+            training_types: trainingTypes,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.log('Update failed, trying upsert:', updateError.message);
+          
+          // Si falla update, intentar UPSERT
+          const { error: upsertError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: userId,
+              email: userEmail || '',
+              name: user?.name || userEmail?.split('@')[0] || 'Usuario',
+              goals: combinedGoals,
+              training_types: trainingTypes,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+
+          if (upsertError) {
+            console.error('❌ Upsert also failed:', upsertError);
+          } else {
+            console.log('✅ Upsert successful');
           }
         } else {
-          console.log('✅ Saved to Supabase successfully');
+          console.log('✅ Update successful');
         }
+
+        // Verificar que se guardó correctamente
+        const { data: verifyData } = await supabase
+          .from('profiles')
+          .select('training_types, goals')
+          .eq('id', userId)
+          .single();
+        
+        console.log('=== VERIFICATION ===');
+        console.log('Saved training_types:', verifyData?.training_types);
+        console.log('Has goals:', !!verifyData?.goals);
+        
       } catch (e) {
-        console.error('Error saving to Supabase:', e);
+        console.error('❌ Error saving to Supabase:', e);
       }
     } else {
-      console.warn('No userId - skipping Supabase save');
+      console.warn('⚠️ No userId - cannot save to Supabase');
     }
+    
+    // También guardar en localStorage como backup
+    localStorage.setItem('fitapp-profile-data', JSON.stringify(profileData));
+    localStorage.setItem('fitapp-training-types', JSON.stringify(trainingTypes));
+    localStorage.setItem('fitapp-goals', JSON.stringify(goals));
 
     // Actualizar store local
     console.log('Updating local store...');
