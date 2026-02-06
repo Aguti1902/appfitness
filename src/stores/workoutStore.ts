@@ -152,9 +152,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     }
 
     try {
-      // Timeout de 3 segundos
+      // Timeout de 8 segundos
       const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) => 
-        setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3000)
+        setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 8000)
       );
       
       const fetchPromise = supabase

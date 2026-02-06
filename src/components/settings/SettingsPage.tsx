@@ -56,6 +56,7 @@ export function SettingsPage() {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateSuccess, setRegenerateSuccess] = useState(false);
 
@@ -140,6 +141,7 @@ export function SettingsPage() {
 
   const handleSaveAll = async () => {
     setIsSaving(true);
+    setSaveError(null);
     
     const goals: UserGoals = {
       primary: primaryGoal as UserGoals['primary'],
@@ -175,9 +177,9 @@ export function SettingsPage() {
     };
 
     try {
-      if (user?.id) {
-        // Guardar en Supabase
-        const { error } = await supabase
+      if (user?.id && user.id !== 'demo-user-id') {
+        // Guardar en Supabase con timeout
+        const savePromise = supabase
           .from('profiles')
           .update({
             name,
@@ -186,12 +188,21 @@ export function SettingsPage() {
             updated_at: new Date().toISOString()
           })
           .eq('id', user.id);
+        
+        const timeoutPromise = new Promise<{ error: Error }>((resolve) => 
+          setTimeout(() => resolve({ error: new Error('Timeout - conexión lenta') }), 10000)
+        );
+
+        const { error } = await Promise.race([savePromise, timeoutPromise]);
 
         if (error) {
           console.error('Error saving to Supabase:', error);
-        } else {
-          console.log('✅ Saved to Supabase');
+          setSaveError('Error al guardar: ' + error.message);
+          setIsSaving(false);
+          return;
         }
+        
+        console.log('✅ Saved to Supabase');
       }
 
       // Actualizar store local
@@ -203,15 +214,16 @@ export function SettingsPage() {
         profile_data: profileData
       });
 
-      // Guardar en localStorage
+      // Guardar en localStorage como backup
       localStorage.setItem('fitapp-profile-data', JSON.stringify(profileData));
       localStorage.setItem('fitapp-training-types', JSON.stringify(trainingTypes));
       localStorage.setItem('fitapp-goals', JSON.stringify(goals));
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error saving:', e);
+      setSaveError('Error inesperado: ' + (e.message || 'Intenta de nuevo'));
     }
     
     setIsSaving(false);
@@ -339,6 +351,14 @@ export function SettingsPage() {
   return (
     <div className="page-content">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Ajustes</h1>
+
+      {saveError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-2">
+          <span className="text-red-500">⚠️</span>
+          {saveError}
+          <button onClick={() => setSaveError(null)} className="ml-auto text-red-500 hover:text-red-700">✕</button>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-3 gap-6">
         {/* Sidebar */}

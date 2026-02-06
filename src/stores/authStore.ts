@@ -343,14 +343,20 @@ export const useAuthStore = create<AuthState>()(
             }, { onConflict: 'id' });
           }
 
+          // Extraer profile_data de dentro de goals (así se guarda en Supabase)
+          const goalsData = profile?.goals || {};
+          const profileData = goalsData.profile_data || null;
+          const cleanGoals = { ...goalsData };
+          delete cleanGoals.profile_data;
+
           const user: User = {
             id: sessionUser.id,
             email: sessionUser.email!,
             name: profile?.name || sessionUser.user_metadata?.name || sessionUser.email!.split('@')[0],
             avatar_url: profile?.avatar_url || sessionUser.user_metadata?.avatar_url,
-            goals: profile?.goals || { primary: 'maintain', activity_level: 'moderate' },
+            goals: Object.keys(cleanGoals).length > 0 ? cleanGoals : { primary: 'maintain', activity_level: 'moderate' },
             training_types: profile?.training_types || [],
-            profile_data: profile?.profile_data,
+            profile_data: profileData,
             created_at: sessionUser.created_at
           };
 
