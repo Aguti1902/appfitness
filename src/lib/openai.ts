@@ -188,8 +188,42 @@ export async function generateRecipe(
 export async function generateShoppingList(
   meals: { name: string; servings: number }[]
 ): Promise<{ ingredient: string; quantity: number; unit: string; category: string }[]> {
+  // Lista básica de fallback
+  const basicList = [
+    { ingredient: 'Pechuga de pollo', quantity: 1500, unit: 'g', category: 'meat' },
+    { ingredient: 'Salmón fresco', quantity: 600, unit: 'g', category: 'meat' },
+    { ingredient: 'Ternera magra', quantity: 500, unit: 'g', category: 'meat' },
+    { ingredient: 'Huevos', quantity: 24, unit: 'unidades', category: 'dairy' },
+    { ingredient: 'Leche semidesnatada', quantity: 3, unit: 'litros', category: 'dairy' },
+    { ingredient: 'Yogur griego natural', quantity: 8, unit: 'unidades', category: 'dairy' },
+    { ingredient: 'Queso fresco', quantity: 400, unit: 'g', category: 'dairy' },
+    { ingredient: 'Arroz integral', quantity: 1, unit: 'kg', category: 'grains' },
+    { ingredient: 'Avena', quantity: 500, unit: 'g', category: 'grains' },
+    { ingredient: 'Pan integral', quantity: 2, unit: 'barras', category: 'grains' },
+    { ingredient: 'Pasta integral', quantity: 500, unit: 'g', category: 'grains' },
+    { ingredient: 'Quinoa', quantity: 500, unit: 'g', category: 'grains' },
+    { ingredient: 'Brócoli', quantity: 1, unit: 'kg', category: 'produce' },
+    { ingredient: 'Espinacas frescas', quantity: 500, unit: 'g', category: 'produce' },
+    { ingredient: 'Tomates', quantity: 10, unit: 'unidades', category: 'produce' },
+    { ingredient: 'Plátanos', quantity: 14, unit: 'unidades', category: 'produce' },
+    { ingredient: 'Manzanas', quantity: 7, unit: 'unidades', category: 'produce' },
+    { ingredient: 'Aguacates', quantity: 5, unit: 'unidades', category: 'produce' },
+    { ingredient: 'Zanahorias', quantity: 1, unit: 'kg', category: 'produce' },
+    { ingredient: 'Pimientos', quantity: 6, unit: 'unidades', category: 'produce' },
+    { ingredient: 'Cebolla', quantity: 5, unit: 'unidades', category: 'produce' },
+    { ingredient: 'Ajo', quantity: 2, unit: 'cabezas', category: 'produce' },
+    { ingredient: 'Frutos rojos', quantity: 500, unit: 'g', category: 'produce' },
+    { ingredient: 'Patatas', quantity: 2, unit: 'kg', category: 'produce' },
+    { ingredient: 'Boniato', quantity: 1, unit: 'kg', category: 'produce' },
+    { ingredient: 'Nueces', quantity: 300, unit: 'g', category: 'other' },
+    { ingredient: 'Almendras', quantity: 300, unit: 'g', category: 'other' },
+    { ingredient: 'Aceite de oliva virgen extra', quantity: 1, unit: 'litro', category: 'other' },
+    { ingredient: 'Miel', quantity: 1, unit: 'bote', category: 'other' },
+    { ingredient: 'Mantequilla de cacahuete', quantity: 1, unit: 'bote', category: 'other' },
+  ];
+
   if (DEMO_MODE) {
-    return getDemoShoppingList();
+    return basicList;
   }
 
   try {
@@ -213,7 +247,7 @@ export async function generateShoppingList(
     return result.items || [];
   } catch (error) {
     console.error('Error generating shopping list:', error);
-    return getDemoShoppingList();
+    return basicList;
   }
 }
 
@@ -660,12 +694,14 @@ export function generateDemoPlanFallback(
     days: dietDays
   };
   
+  // Generar lista de compra basada en el plan de dieta real
+  const shoppingList = generateWeeklyShoppingListFromDiet(dietPlan);
+  
   return {
     workout_plan: workoutPlan,
     diet_plan: dietPlan,
-    shopping_list: getDemoShoppingList().map(item => ({ 
+    shopping_list: shoppingList.map(item => ({ 
       ...item, 
-      checked: false,
       category: item.category as ShoppingListItem['category']
     })),
     recommendations: generatePersonalizedTips(goals, profileData),
@@ -1689,25 +1725,111 @@ function getDemoRecipe(name: string): Recipe {
   };
 }
 
-function getDemoShoppingList() {
-  return [
-    { ingredient: 'Pechuga de pollo', quantity: 1, unit: 'kg', category: 'meat' },
-    { ingredient: 'Salmón', quantity: 500, unit: 'g', category: 'meat' },
-    { ingredient: 'Huevos', quantity: 12, unit: 'unidades', category: 'dairy' },
-    { ingredient: 'Leche', quantity: 2, unit: 'litros', category: 'dairy' },
-    { ingredient: 'Yogur griego', quantity: 4, unit: 'unidades', category: 'dairy' },
-    { ingredient: 'Arroz integral', quantity: 500, unit: 'g', category: 'grains' },
-    { ingredient: 'Avena', quantity: 500, unit: 'g', category: 'grains' },
-    { ingredient: 'Pan integral', quantity: 1, unit: 'unidad', category: 'grains' },
-    { ingredient: 'Brócoli', quantity: 500, unit: 'g', category: 'produce' },
-    { ingredient: 'Espinacas', quantity: 300, unit: 'g', category: 'produce' },
-    { ingredient: 'Tomates', quantity: 6, unit: 'unidades', category: 'produce' },
-    { ingredient: 'Plátanos', quantity: 6, unit: 'unidades', category: 'produce' },
-    { ingredient: 'Manzanas', quantity: 4, unit: 'unidades', category: 'produce' },
-    { ingredient: 'Aguacates', quantity: 3, unit: 'unidades', category: 'produce' },
-    { ingredient: 'Nueces', quantity: 200, unit: 'g', category: 'other' },
-    { ingredient: 'Aceite de oliva', quantity: 500, unit: 'ml', category: 'other' }
+// Genera lista de compra semanal basada en el plan de dieta real
+function generateWeeklyShoppingListFromDiet(dietPlan: WeeklyDietPlan): { ingredient: string; quantity: number; unit: string; category: string; checked: boolean }[] {
+  const ingredientMap = new Map<string, { quantity: number; unit: string; category: string }>();
+  
+  // Función para categorizar ingredientes
+  const categorizeIngredient = (name: string): string => {
+    const lower = name.toLowerCase();
+    // Carnes y pescados
+    if (['pollo', 'pavo', 'ternera', 'cerdo', 'salmón', 'atún', 'merluza', 'gambas', 'jamón', 'lomo', 'carne'].some(m => lower.includes(m))) return 'meat';
+    // Lácteos
+    if (['leche', 'yogur', 'queso', 'huevo', 'nata', 'mantequilla', 'requesón'].some(d => lower.includes(d))) return 'dairy';
+    // Cereales y granos
+    if (['arroz', 'pasta', 'pan', 'avena', 'quinoa', 'cereales', 'harina', 'tortita', 'tostada'].some(g => lower.includes(g))) return 'grains';
+    // Frutas y verduras
+    if (['tomate', 'lechuga', 'espinaca', 'brócoli', 'zanahoria', 'pimiento', 'cebolla', 'ajo', 'patata', 'boniato', 'aguacate',
+         'manzana', 'plátano', 'naranja', 'fresa', 'arándano', 'kiwi', 'piña', 'melón', 'sandía', 'uva', 'pera', 'melocotón',
+         'frambuesa', 'fruta', 'verdura', 'ensalada', 'champiñón', 'calabacín', 'berenjena', 'pepino', 'apio', 'judía', 'guisante'].some(p => lower.includes(p))) return 'produce';
+    return 'other';
+  };
+  
+  // Función para normalizar el nombre del ingrediente
+  const normalizeIngredient = (name: string): string => {
+    return name.trim().toLowerCase().replace(/\s+/g, ' ');
+  };
+  
+  // Función para parsear cantidad del string
+  const parseQuantityFromString = (quantityStr: string): { quantity: number; unit: string } => {
+    const match = quantityStr.match(/(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l|litros?|unidades?|u\.|piezas?|rebanadas?|cucharadas?|tazas?)?/i);
+    if (match) {
+      const num = parseFloat(match[1].replace(',', '.'));
+      const unit = match[2] || 'unidades';
+      return { quantity: num, unit: unit.toLowerCase() };
+    }
+    return { quantity: 1, unit: 'unidad' };
+  };
+  
+  // Recorrer todos los días y comidas
+  dietPlan.days?.forEach(day => {
+    day.meals?.forEach(meal => {
+      // Extraer alimentos de la comida
+      meal.foods?.forEach(food => {
+        const normalizedName = normalizeIngredient(food.name);
+        const { quantity, unit } = parseQuantityFromString(food.quantity);
+        const category = categorizeIngredient(food.name);
+        
+        if (ingredientMap.has(normalizedName)) {
+          const existing = ingredientMap.get(normalizedName)!;
+          // Sumar cantidades si tienen la misma unidad
+          if (existing.unit === unit || (existing.unit.startsWith('unidad') && unit.startsWith('unidad'))) {
+            existing.quantity += quantity;
+          }
+        } else {
+          ingredientMap.set(normalizedName, { quantity, unit, category });
+        }
+      });
+      
+      // Extraer ingredientes de las recetas
+      meal.recipe?.ingredients?.forEach(ing => {
+        const { quantity, unit } = parseQuantityFromString(ing);
+        // Extraer nombre quitando la cantidad
+        const namePart = ing.replace(/^\d+(?:[.,]\d+)?\s*(g|kg|ml|l|litros?|unidades?|u\.|piezas?|rebanadas?|cucharadas?|tazas?)?\s*/i, '').trim();
+        const normalizedName = normalizeIngredient(namePart || ing);
+        const category = categorizeIngredient(namePart || ing);
+        
+        if (ingredientMap.has(normalizedName)) {
+          const existing = ingredientMap.get(normalizedName)!;
+          if (existing.unit === unit) {
+            existing.quantity += quantity;
+          }
+        } else {
+          ingredientMap.set(normalizedName, { quantity, unit, category });
+        }
+      });
+    });
+  });
+  
+  // Convertir el mapa a array y redondear cantidades
+  const shoppingList = Array.from(ingredientMap.entries())
+    .map(([ingredient, data]) => ({
+      ingredient: ingredient.charAt(0).toUpperCase() + ingredient.slice(1), // Capitalizar
+      quantity: Math.ceil(data.quantity), // Redondear hacia arriba
+      unit: data.unit,
+      category: data.category,
+      checked: false
+    }))
+    // Ordenar por categoría
+    .sort((a, b) => {
+      const categoryOrder = ['produce', 'meat', 'dairy', 'grains', 'other'];
+      return categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
+    });
+  
+  // Añadir items básicos que siempre se necesitan si no están
+  const basics = [
+    { ingredient: 'Aceite de oliva virgen extra', quantity: 1, unit: 'litro', category: 'other' },
+    { ingredient: 'Sal', quantity: 1, unit: 'paquete', category: 'other' },
+    { ingredient: 'Pimienta', quantity: 1, unit: 'bote', category: 'other' },
   ];
+  
+  basics.forEach(basic => {
+    if (!shoppingList.some(item => item.ingredient.toLowerCase().includes(basic.ingredient.toLowerCase().split(' ')[0]))) {
+      shoppingList.push({ ...basic, checked: false });
+    }
+  });
+  
+  return shoppingList;
 }
 
 function getDemoChatResponse(message: string): string {

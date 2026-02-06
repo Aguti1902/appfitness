@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { 
   Plus, 
   Utensils, 
-  ChefHat,
   ShoppingCart,
   Calendar,
   Sparkles,
@@ -13,12 +12,11 @@ import { useAuthStore } from '../../stores/authStore';
 import { useNutritionStore } from '../../stores/nutritionStore';
 import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
-import { RecipesSection } from './RecipesSection';
 import { ShoppingListSection } from './ShoppingListSection';
 import { MealForm } from './MealForm';
 import type { Meal, GeneratedPlan } from '../../types';
 
-type Tab = 'plan' | 'diary' | 'recipes' | 'shopping';
+type Tab = 'plan' | 'diary' | 'shopping';
 
 export function NutritionPage() {
   const { user } = useAuthStore();
@@ -71,7 +69,6 @@ export function NutritionPage() {
   const tabs = [
     { id: 'plan', label: 'Mi Plan', icon: Sparkles },
     { id: 'diary', label: 'Diario', icon: Calendar },
-    { id: 'recipes', label: 'Recetas', icon: ChefHat },
     { id: 'shopping', label: 'Lista compra', icon: ShoppingCart },
   ] as const;
 
@@ -369,9 +366,6 @@ export function NutritionPage() {
           </div>
         </div>
       )}
-
-      {/* Recipes Tab */}
-      {activeTab === 'recipes' && <RecipesSection />}
 
       {/* Shopping List Tab */}
       {activeTab === 'shopping' && <ShoppingListSection plan={generatedPlan} />}
