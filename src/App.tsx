@@ -45,13 +45,23 @@ function AppContent() {
     // Función auxiliar para cargar datos del usuario
     const loadUserData = async (sessionUser: any): Promise<any> => {
       try {
-        const { data: profile } = await supabase
+        console.log('loadUserData: Fetching profile for', sessionUser.email);
+        
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', sessionUser.id)
           .maybeSingle();
 
+        if (error) {
+          console.error('loadUserData: Error fetching profile:', error);
+        }
+
+        console.log('loadUserData: Profile found:', !!profile);
+        console.log('loadUserData: training_types from DB:', profile?.training_types);
+
         if (!profile) {
+          console.log('loadUserData: No profile, creating one...');
           await supabase.from('profiles').upsert({
             id: sessionUser.id,
             email: sessionUser.email,
@@ -60,7 +70,7 @@ function AppContent() {
           }, { onConflict: 'id' });
         }
 
-        return {
+        const userData = {
           id: sessionUser.id,
           email: sessionUser.email!,
           name: profile?.name || sessionUser.user_metadata?.name || sessionUser.email!.split('@')[0],
@@ -70,6 +80,9 @@ function AppContent() {
           profile_data: profile?.profile_data,
           created_at: sessionUser.created_at
         };
+        
+        console.log('loadUserData: Returning userData with training_types:', userData.training_types);
+        return userData;
       } catch (error) {
         console.error('Error loading user data:', error);
         return null;

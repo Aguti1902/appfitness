@@ -274,35 +274,44 @@ export function OnboardingPage() {
     });
     console.log('✅ Store updated');
 
-    // Guardar en Supabase en background (con timeout de 5 segundos, no bloquear)
+    // Guardar en Supabase - ESPERAR a que se complete
     if (userId) {
-      const savePromise = (async () => {
-        try {
-          const userEmail = user?.email || (await supabase.auth.getSession()).data?.session?.user?.email;
+      try {
+        const userEmail = user?.email || (await supabase.auth.getSession()).data?.session?.user?.email;
+        
+        console.log('Saving to Supabase...');
+        console.log('training_types to save:', trainingTypes);
+        
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({
+            id: userId,
+            email: userEmail || '',
+            name: user?.name || userEmail?.split('@')[0] || 'Usuario',
+            goals: combinedGoals,
+            training_types: trainingTypes,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+        
+        if (error) {
+          console.error('❌ Supabase save error:', error);
+        } else {
+          console.log('✅ Saved to Supabase successfully');
           
-          await supabase
+          // Verificar que se guardó
+          const { data: verify } = await supabase
             .from('profiles')
-            .upsert({
-              id: userId,
-              email: userEmail || '',
-              name: user?.name || userEmail?.split('@')[0] || 'Usuario',
-              goals: combinedGoals,
-              training_types: trainingTypes,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'id' });
-          
-          console.log('✅ Saved to Supabase');
-        } catch (e) {
-          console.error('❌ Supabase save error:', e);
+            .select('training_types')
+            .eq('id', userId)
+            .single();
+          console.log('✅ Verified training_types:', verify?.training_types);
         }
-      })();
-      
-      // No esperar más de 5 segundos
-      const timeout = new Promise(resolve => setTimeout(resolve, 5000));
-      await Promise.race([savePromise, timeout]);
+      } catch (e) {
+        console.error('❌ Supabase error:', e);
+      }
     }
 
-    // Navegar SIEMPRE
+    // Navegar
     console.log('🚀 Navigating to /ai-processing...');
     setIsLoading(false);
     navigate('/ai-processing');
