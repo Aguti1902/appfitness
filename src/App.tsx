@@ -83,8 +83,10 @@ function AppContent() {
         
         if (!mounted) return;
 
+        let userData = null;
+        
         if (session?.user) {
-          const userData = await loadUserData(session.user);
+          userData = await loadUserData(session.user);
           if (mounted && userData) {
             setUser(userData);
           }
@@ -98,10 +100,10 @@ function AppContent() {
         }
 
         // Redirigir después de OAuth - verificar si ya completó onboarding
-        if (event === 'SIGNED_IN' && session?.user) {
+        if (event === 'SIGNED_IN' && session?.user && userData) {
           if (window.location.hash.includes('access_token') || window.location.pathname === '/auth/callback') {
             // Verificar si ya completó onboarding
-            const hasCompletedOnboarding = userData?.training_types && 
+            const hasCompletedOnboarding = userData.training_types && 
               Array.isArray(userData.training_types) && 
               userData.training_types.length > 0;
             
