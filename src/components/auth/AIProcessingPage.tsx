@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Brain, Dumbbell, Utensils, Calendar, CheckCircle, Sparkles, ShoppingCart } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { supabase } from '../../lib/supabase';
-import { generateCompletePlan } from '../../lib/openai';
+import { generateCompletePlan, generateDemoPlanFallback } from '../../lib/openai';
 import type { GeneratedPlan, UserGoals, TrainingType, UserProfileData } from '../../types';
 
 const PROCESSING_STEPS = [
@@ -102,31 +102,9 @@ export function AIProcessingPage() {
         );
         console.log('Plan generated successfully');
       } catch (genError) {
-        console.warn('Error/timeout generating plan, using default:', genError);
-        // Plan de demo
-        generatedPlan = {
-          workout_plan: { 
-            name: 'Plan de Entrenamiento', 
-            description: 'Plan personalizado para ti',
-            days: [], 
-            rest_days: [0, 3], 
-            estimated_calories_burned_weekly: 2500 
-          },
-          diet_plan: { 
-            name: 'Plan Nutricional', 
-            description: '2000 kcal diarias',
-            daily_calories: 2000, 
-            macros: { protein_grams: 150, carbs_grams: 200, fat_grams: 70 }, 
-            days: [] 
-          },
-          shopping_list: [],
-          recommendations: [
-            'Entrena con consistencia para ver resultados',
-            'Mantente hidratado bebiendo 2-3L de agua al día',
-            'Descansa al menos 7-8 horas'
-          ],
-          generated_at: new Date().toISOString()
-        };
+        console.warn('Error/timeout generating plan, using demo plan:', genError);
+        // Usar plan de demo completo con datos reales
+        generatedPlan = generateDemoPlanFallback(goals, trainingTypes, profileData);
       }
       
       // Animar pasos restantes rápidamente

@@ -267,7 +267,7 @@ export async function generateCompletePlan(
   // Si no hay API key, usar datos de demo
   if (DEMO_MODE) {
     console.log('Using demo mode for plan generation');
-    return generateDemoPlan(goals, trainingTypes, profileData, dailyCalories);
+    return generateDemoPlanFallback(goals, trainingTypes, profileData, dailyCalories);
   }
 
   try {
@@ -288,7 +288,7 @@ export async function generateCompletePlan(
     return plan;
   } catch (error) {
     console.error('Error generating complete plan:', error);
-    return generateDemoPlan(goals, trainingTypes, profileData, dailyCalories);
+    return generateDemoPlanFallback(goals, trainingTypes, profileData, dailyCalories);
   }
 }
 
@@ -531,8 +531,8 @@ function generatePersonalizedTips(goals: UserGoals, profileData?: UserProfileDat
   return tips;
 }
 
-// Función para generar plan de demo cuando no hay API key
-function generateDemoPlan(
+// Función para generar plan de demo - exportada para fallback
+export function generateDemoPlanFallback(
   goals: UserGoals,
   trainingTypes: TrainingType[],
   profileData?: UserProfileData,
