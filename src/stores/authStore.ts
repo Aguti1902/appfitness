@@ -35,7 +35,7 @@ const DEMO_USER: User = {
     activity_level: 'active',
     daily_calories: 2800
   },
-  training_types: ['gym', 'crossfit'],
+  training_types: ['gym'],
   created_at: new Date().toISOString()
 };
 
