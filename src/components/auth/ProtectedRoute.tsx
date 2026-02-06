@@ -8,7 +8,6 @@ import { Sidebar } from '../ui/Sidebar';
 export function ProtectedRoute() {
   const { isAuthenticated, user, setUser } = useAuthStore();
   const [status, setStatus] = useState<'checking' | 'ready' | 'no-session'>('checking');
-  const [checkedSession, setCheckedSession] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -77,7 +76,6 @@ export function ProtectedRoute() {
         }
       }
       
-      setCheckedSession(true);
     };
 
     check();
