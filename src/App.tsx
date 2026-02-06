@@ -23,6 +23,8 @@ import { AICoachPage } from './components/ai/AICoachPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GoalsPage } from './components/goals/GoalsPage';
 import { CrossfitWODsPage } from './components/crossfit/CrossfitWODsPage';
+import { HyroxPage } from './components/sports/HyroxPage';
+import { HybridPage } from './components/sports/HybridPage';
 
 function AppContent() {
   const { isAuthenticated, setUser } = useAuthStore();
@@ -172,6 +174,8 @@ function AppContent() {
         <Route path="/ai-coach" element={<AICoachPage />} />
         <Route path="/goals" element={<GoalsPage />} />
         <Route path="/crossfit" element={<CrossfitWODsPage />} />
+        <Route path="/hyrox" element={<HyroxPage />} />
+        <Route path="/hybrid" element={<HybridPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

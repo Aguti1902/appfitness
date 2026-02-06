@@ -75,23 +75,11 @@ export interface WeeklyCrossfitWODs {
 }
 
 export type TrainingType = 
-  | 'crossfit' 
   | 'gym' 
-  | 'running' 
-  | 'swimming' 
-  | 'yoga' 
-  | 'pilates'
-  | 'cycling'
-  | 'hiking'
-  | 'martial_arts'
-  | 'tennis'
-  | 'padel'
-  | 'basketball'
-  | 'football'
-  | 'calisthenics'
-  | 'boxing'
-  | 'dance'
-  | 'other';
+  | 'crossfit' 
+  | 'hyrox'
+  | 'hybrid'
+  | 'running';
 
 // Workout types
 export interface Workout {

@@ -29,22 +29,13 @@ const GOALS = [
 const TRAINING_TYPES: { id: TrainingType; label: string; emoji: string }[] = [
   { id: 'gym', label: 'Gimnasio', emoji: '🏋️' },
   { id: 'crossfit', label: 'CrossFit', emoji: '💪' },
+  { id: 'hyrox', label: 'Hyrox', emoji: '🔥' },
+  { id: 'hybrid', label: 'Hybrid', emoji: '⚡' },
   { id: 'running', label: 'Running', emoji: '🏃' },
-  { id: 'swimming', label: 'Natación', emoji: '🏊' },
-  { id: 'cycling', label: 'Ciclismo', emoji: '🚴' },
-  { id: 'yoga', label: 'Yoga', emoji: '🧘' },
-  { id: 'pilates', label: 'Pilates', emoji: '🤸' },
-  { id: 'calisthenics', label: 'Calistenia', emoji: '🤾' },
-  { id: 'boxing', label: 'Boxeo', emoji: '🥊' },
-  { id: 'martial_arts', label: 'Artes marciales', emoji: '🥋' },
-  { id: 'tennis', label: 'Tenis', emoji: '🎾' },
-  { id: 'padel', label: 'Pádel', emoji: '🏸' },
-  { id: 'basketball', label: 'Baloncesto', emoji: '🏀' },
-  { id: 'football', label: 'Fútbol', emoji: '⚽' },
-  { id: 'hiking', label: 'Senderismo', emoji: '🥾' },
-  { id: 'dance', label: 'Baile', emoji: '💃' },
-  { id: 'other', label: 'Otro', emoji: '🎯' },
 ];
+
+// Deportes que requieren elegir entre clase dirigida u open box
+const SPORTS_WITH_CLASS_OPTION = ['crossfit', 'hyrox', 'hybrid'];
 
 const ACTIVITY_LEVELS = [
   { id: 'sedentary', label: 'Sedentario', description: 'Poco o nada de ejercicio' },
@@ -256,39 +247,40 @@ export function OnboardingPage() {
       }
     }
 
-    // Guardar en Supabase si tenemos userId
-    if (userId) {
-      console.log('=== SAVING TO SUPABASE ===');
-      console.log('User ID:', userId);
-      console.log('Training types:', trainingTypes);
-      
-      // Obtener email del usuario actual
-      const sessionData = await supabase.auth.getSession();
-      const userEmail = user?.email || sessionData.data?.session?.user?.email;
-      
-      // Combinar goals con profile_data en un solo objeto JSONB
-      // (la tabla profiles solo tiene columna 'goals' como JSONB)
-      const combinedGoals = {
-        ...goals,
-        profile_data: profileData // Guardar profile_data dentro de goals
-      };
-      
-      try {
-        // Primero intentar UPDATE (más común)
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            goals: combinedGoals,
-            training_types: trainingTypes,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
+    // Combinar goals con profile_data
+    const combinedGoals = {
+      ...goals,
+      profile_data: profileData
+    };
+    
+    // Guardar en localStorage PRIMERO (siempre funciona)
+    localStorage.setItem('fitapp-profile-data', JSON.stringify(profileData));
+    localStorage.setItem('fitapp-training-types', JSON.stringify(trainingTypes));
+    localStorage.setItem('fitapp-goals', JSON.stringify(goals));
+    console.log('✅ Saved to localStorage');
 
-        if (updateError) {
-          console.log('Update failed, trying upsert:', updateError.message);
+    // Actualizar store local
+    const { setUser } = useAuthStore.getState();
+    const currentUser = useAuthStore.getState().user;
+    setUser({
+      id: userId || currentUser?.id || 'temp-id',
+      email: currentUser?.email || '',
+      name: currentUser?.name || '',
+      avatar_url: currentUser?.avatar_url,
+      goals,
+      training_types: trainingTypes,
+      profile_data: profileData,
+      created_at: currentUser?.created_at || new Date().toISOString()
+    });
+    console.log('✅ Store updated');
+
+    // Guardar en Supabase en background (con timeout de 5 segundos, no bloquear)
+    if (userId) {
+      const savePromise = (async () => {
+        try {
+          const userEmail = user?.email || (await supabase.auth.getSession()).data?.session?.user?.email;
           
-          // Si falla update, intentar UPSERT
-          const { error: upsertError } = await supabase
+          await supabase
             .from('profiles')
             .upsert({
               id: userId,
@@ -298,61 +290,20 @@ export function OnboardingPage() {
               training_types: trainingTypes,
               updated_at: new Date().toISOString()
             }, { onConflict: 'id' });
-
-          if (upsertError) {
-            console.error('❌ Upsert also failed:', upsertError);
-          } else {
-            console.log('✅ Upsert successful');
-          }
-        } else {
-          console.log('✅ Update successful');
+          
+          console.log('✅ Saved to Supabase');
+        } catch (e) {
+          console.error('❌ Supabase save error:', e);
         }
-
-        // Verificar que se guardó correctamente
-        const { data: verifyData } = await supabase
-          .from('profiles')
-          .select('training_types, goals')
-          .eq('id', userId)
-          .single();
-        
-        console.log('=== VERIFICATION ===');
-        console.log('Saved training_types:', verifyData?.training_types);
-        console.log('Has goals:', !!verifyData?.goals);
-        
-      } catch (e) {
-        console.error('❌ Error saving to Supabase:', e);
-      }
-    } else {
-      console.warn('⚠️ No userId - cannot save to Supabase');
-    }
-    
-    // También guardar en localStorage como backup
-    localStorage.setItem('fitapp-profile-data', JSON.stringify(profileData));
-    localStorage.setItem('fitapp-training-types', JSON.stringify(trainingTypes));
-    localStorage.setItem('fitapp-goals', JSON.stringify(goals));
-
-    // Actualizar store local
-    console.log('Updating local store...');
-    try {
-      const { setUser } = useAuthStore.getState();
-      const currentUser = useAuthStore.getState().user;
-      setUser({
-        id: userId || currentUser?.id || 'temp-id',
-        email: currentUser?.email || '',
-        name: currentUser?.name || '',
-        avatar_url: currentUser?.avatar_url,
-        goals,
-        training_types: trainingTypes,
-        profile_data: profileData,
-        created_at: currentUser?.created_at || new Date().toISOString()
-      });
-      console.log('Store updated');
-    } catch (e) {
-      console.error('Error updating store:', e);
+      })();
+      
+      // No esperar más de 5 segundos
+      const timeout = new Promise(resolve => setTimeout(resolve, 5000));
+      await Promise.race([savePromise, timeout]);
     }
 
-    // SIEMPRE navegar
-    console.log('Navigating to /ai-processing...');
+    // Navegar SIEMPRE
+    console.log('🚀 Navigating to /ai-processing...');
     setIsLoading(false);
     navigate('/ai-processing');
   };
@@ -741,10 +692,10 @@ export function OnboardingPage() {
                         </div>
                       </div>
                       
-                      {/* CrossFit específico: Clase u Open */}
-                      {sport === 'crossfit' && (
+                      {/* Deportes con opción de Clase u Open */}
+                      {SPORTS_WITH_CLASS_OPTION.includes(sport) && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
-                          <label className="block text-sm text-gray-600 mb-2">¿Cómo entrenas CrossFit?</label>
+                          <label className="block text-sm text-gray-600 mb-2">¿Cómo entrenas {TRAINING_TYPES.find(t => t.id === sport)?.label}?</label>
                           <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => setSportsFrequency(prev => ({
@@ -758,7 +709,7 @@ export function OnboardingPage() {
                               }`}
                             >
                               <p className="font-medium text-sm">📋 Clase dirigida</p>
-                              <p className="text-xs text-gray-500">El WOD lo pone el box</p>
+                              <p className="text-xs text-gray-500">El entreno lo pone el box</p>
                             </button>
                             <button
                               onClick={() => setSportsFrequency(prev => ({
@@ -778,7 +729,7 @@ export function OnboardingPage() {
                           {freq.type === 'class' && (
                             <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                               <p className="text-xs text-blue-700">
-                                💡 Podrás añadir los WODs de tu box desde la sección de CrossFit para que la IA adapte tu plan.
+                                💡 Podrás añadir tus WODs desde la sección correspondiente para que la IA adapte tu plan.
                               </p>
                             </div>
                           )}
@@ -787,12 +738,6 @@ export function OnboardingPage() {
                     </div>
                   );
                 })}
-                
-                <div className="bg-green-50 rounded-lg p-4">
-                  <p className="text-sm text-green-800">
-                    <strong>Total semanal:</strong> {Object.values(sportsFrequency).reduce((acc, s) => acc + (s.days || 0), 0)} días de entrenamiento
-                  </p>
-                </div>
               </div>
             </div>
           )}
@@ -1181,15 +1126,6 @@ export function OnboardingPage() {
           </div>
         </div>
 
-        {/* Skip option */}
-        <p className="text-center text-gray-500 mt-4">
-          <button 
-            onClick={() => navigate('/')} 
-            className="hover:text-gray-700 underline"
-          >
-            Saltar y configurar después
-          </button>
-        </p>
       </div>
     </div>
   );

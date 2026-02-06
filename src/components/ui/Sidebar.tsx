@@ -12,17 +12,28 @@ import {
   Menu,
   X,
   Target,
-  Flame
+  Flame,
+  Zap,
+  Trophy
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 
-const navItems = [
+// Configuración de deportes con sus rutas e iconos
+const SPORT_CONFIG: Record<string, { route: string; icon: typeof Flame; label: string }> = {
+  crossfit: { route: '/crossfit', icon: Flame, label: 'CrossFit' },
+  hyrox: { route: '/hyrox', icon: Trophy, label: 'Hyrox' },
+  hybrid: { route: '/hybrid', icon: Zap, label: 'Hybrid' },
+};
+
+const baseNavItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
   { to: '/workouts', icon: Dumbbell, label: 'Entrenamientos' },
   { to: '/nutrition', icon: Utensils, label: 'Nutrición' },
   { to: '/goals', icon: Target, label: 'Objetivos' },
-  { to: '/crossfit', icon: Flame, label: 'CrossFit' },
+];
+
+const additionalNavItems = [
   { to: '/progress', icon: TrendingUp, label: 'Progreso' },
   { to: '/social', icon: Users, label: 'Amigos' },
   { to: '/schedule', icon: Calendar, label: 'Horarios' },
@@ -33,6 +44,35 @@ export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout } = useAuthStore();
 
+  // Generar items de navegación dinámicamente según los deportes del usuario
+  const navItems = useMemo(() => {
+    const items = [...baseNavItems];
+    
+    // Añadir pestañas de deportes según los training_types del usuario
+    const userSports = user?.training_types || [];
+    
+    userSports.forEach(sport => {
+      const config = SPORT_CONFIG[sport];
+      if (config) {
+        items.push({
+          to: config.route,
+          icon: config.icon,
+          label: config.label
+        });
+      }
+    });
+    
+    // Añadir el resto de items
+    items.push(...additionalNavItems);
+    
+    return items;
+  }, [user?.training_types]);
+
+  // Items para el menú móvil inferior (los 5 primeros)
+  const mobileNavItems = useMemo(() => {
+    return navItems.slice(0, 5);
+  }, [navItems]);
+
   const handleLogout = async () => {
     console.log('Logout button clicked');
     try {
@@ -41,13 +81,12 @@ export function Sidebar() {
       console.error('Logout error:', e);
     }
     console.log('Navigating to login...');
-    // Forzar recarga completa para limpiar todo el estado
     window.location.href = '/login';
   };
 
   return (
     <>
-      {/* Mobile menu button - repositioned to not overlap content */}
+      {/* Mobile menu button */}
       <button
         onClick={() => setIsOpen(true)}
         className="fixed top-2 left-2 z-50 p-1.5 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm md:hidden"
@@ -147,10 +186,10 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Bottom navigation for mobile - compact design */}
+      {/* Bottom navigation for mobile */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 md:hidden safe-area-inset-bottom">
         <div className="flex justify-around items-center py-1 px-1">
-          {navItems.slice(0, 5).map((item) => (
+          {mobileNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
