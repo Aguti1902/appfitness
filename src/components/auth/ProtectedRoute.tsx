@@ -8,29 +8,31 @@ import { Sidebar } from '../ui/Sidebar';
 export function ProtectedRoute() {
   const { isAuthenticated, user, setUser } = useAuthStore();
   const [status, setStatus] = useState<'checking' | 'ready' | 'no-session'>('checking');
+  const [checkedSession, setCheckedSession] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     let mounted = true;
     
     const check = async () => {
-      console.log('ProtectedRoute: isAuthenticated =', isAuthenticated, 'user =', user?.email);
+      console.log('ProtectedRoute: Starting check...');
+      console.log('ProtectedRoute: Store - isAuthenticated:', isAuthenticated, 'user:', user?.email);
       
-      // Si ya hay usuario autenticado en el store, confiar en él
-      if (isAuthenticated && user) {
-        console.log('ProtectedRoute: User already in store');
-        setStatus('ready');
-        return;
-      }
-      
-      // Si no hay usuario en store, verificar con Supabase
+      // SIEMPRE verificar con Supabase primero para tener datos actualizados
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('ProtectedRoute: Session error:', sessionError);
+        }
         
         if (!mounted) return;
         
+        console.log('ProtectedRoute: Supabase session:', session?.user?.email || 'none');
+        
         if (session?.user) {
-          console.log('ProtectedRoute: Found session, loading profile');
+          // Hay sesión válida en Supabase
+          console.log('ProtectedRoute: Valid session found, loading profile...');
           
           const { data: profile } = await supabase
             .from('profiles')
@@ -39,6 +41,8 @@ export function ProtectedRoute() {
             .maybeSingle();
           
           if (!mounted) return;
+
+          console.log('ProtectedRoute: Profile loaded, training_types:', profile?.training_types);
 
           // Extraer profile_data de goals
           const goalsData = profile?.goals || {};
@@ -59,30 +63,43 @@ export function ProtectedRoute() {
           
           setStatus('ready');
         } else {
-          console.log('ProtectedRoute: No session');
+          // No hay sesión en Supabase
+          console.log('ProtectedRoute: No session in Supabase');
           setStatus('no-session');
         }
       } catch (error) {
         console.error('ProtectedRoute error:', error);
-        if (mounted) setStatus('no-session');
+        // En caso de error, si hay usuario en store, confiar en él
+        if (isAuthenticated && user) {
+          setStatus('ready');
+        } else {
+          setStatus('no-session');
+        }
       }
+      
+      setCheckedSession(true);
     };
 
     check();
     
-    // Timeout de seguridad
+    // Timeout de seguridad más largo (8 segundos)
     const timeout = setTimeout(() => {
       if (mounted && status === 'checking') {
-        console.log('ProtectedRoute: Timeout');
-        setStatus(isAuthenticated ? 'ready' : 'no-session');
+        console.log('ProtectedRoute: Timeout reached');
+        // En timeout, si hay algo en el store, confiar en él
+        if (isAuthenticated && user) {
+          setStatus('ready');
+        } else {
+          setStatus('no-session');
+        }
       }
-    }, 3000);
+    }, 8000);
 
     return () => {
       mounted = false;
       clearTimeout(timeout);
     };
-  }, [isAuthenticated, user, setUser]);
+  }, []); // Sin dependencias para que solo se ejecute una vez
 
   // Loading
   if (status === 'checking') {
@@ -91,15 +108,19 @@ export function ProtectedRoute() {
 
   // Sin sesión -> login
   if (status === 'no-session') {
+    console.log('ProtectedRoute: Redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar onboarding
-  const trainingTypes = user?.training_types || [];
+  // Verificar onboarding - usar datos del store que ya fueron actualizados
+  const currentUser = useAuthStore.getState().user;
+  const trainingTypes = currentUser?.training_types || [];
   const needsOnboarding = !Array.isArray(trainingTypes) || trainingTypes.length === 0;
   
+  console.log('ProtectedRoute: Ready - needsOnboarding:', needsOnboarding, 'path:', location.pathname);
+  
   if (needsOnboarding && location.pathname !== '/onboarding') {
-    console.log('ProtectedRoute: Needs onboarding, redirecting');
+    console.log('ProtectedRoute: Redirecting to onboarding');
     return <Navigate to="/onboarding" replace />;
   }
 
