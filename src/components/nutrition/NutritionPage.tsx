@@ -11,15 +11,14 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useNutritionStore } from '../../stores/nutritionStore';
-import { generateDietPlan } from '../../lib/openai';
 import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
 import { RecipesSection } from './RecipesSection';
 import { ShoppingListSection } from './ShoppingListSection';
 import { MealForm } from './MealForm';
-import type { Meal } from '../../types';
+import type { Meal, GeneratedPlan } from '../../types';
 
-type Tab = 'diary' | 'recipes' | 'shopping' | 'diet';
+type Tab = 'plan' | 'diary' | 'recipes' | 'shopping';
 
 export function NutritionPage() {
   const { user } = useAuthStore();
@@ -27,16 +26,27 @@ export function NutritionPage() {
     meals, 
     fetchMeals, 
     fetchRecipes,
-    dietPlan,
-    setDietPlan,
     getTodayNutrition
   } = useNutritionStore();
   
-  const [activeTab, setActiveTab] = useState<Tab>('diary');
+  const [activeTab, setActiveTab] = useState<Tab>('plan');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showMealForm, setShowMealForm] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<Meal['meal_type']>('breakfast');
-  const [generatingDiet, setGeneratingDiet] = useState(false);
+  const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
+  const [selectedDay, setSelectedDay] = useState(new Date().getDay());
+
+  useEffect(() => {
+    // Cargar plan generado desde localStorage
+    const savedPlan = localStorage.getItem('fitapp-generated-plan');
+    if (savedPlan) {
+      try {
+        setGeneratedPlan(JSON.parse(savedPlan));
+      } catch (e) {
+        console.error('Error loading plan:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -46,9 +56,11 @@ export function NutritionPage() {
   }, [user?.id, selectedDate]);
 
   const todayNutrition = getTodayNutrition();
-  const targetCalories = user?.goals?.daily_calories || 2000;
+  const targetCalories = generatedPlan?.diet_plan?.daily_calories || user?.goals?.daily_calories || 2000;
   
   const dayMeals = meals.filter(m => m.meal_date === selectedDate);
+  const dietPlan = generatedPlan?.diet_plan;
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
   const changeDate = (days: number) => {
     const date = new Date(selectedDate);
@@ -56,22 +68,11 @@ export function NutritionPage() {
     setSelectedDate(date.toISOString().split('T')[0]);
   };
 
-  const handleGenerateDiet = async () => {
-    if (!user) return;
-    setGeneratingDiet(true);
-    const plan = await generateDietPlan(user.goals);
-    if (plan) {
-      setDietPlan(plan);
-    }
-    setGeneratingDiet(false);
-    setActiveTab('diet');
-  };
-
   const tabs = [
+    { id: 'plan', label: 'Mi Plan', icon: Sparkles },
     { id: 'diary', label: 'Diario', icon: Calendar },
     { id: 'recipes', label: 'Recetas', icon: ChefHat },
     { id: 'shopping', label: 'Lista compra', icon: ShoppingCart },
-    { id: 'diet', label: 'Mi dieta', icon: Sparkles },
   ] as const;
 
   const mealTypes = [
@@ -87,16 +88,8 @@ export function NutritionPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Nutrición</h1>
-          <p className="text-gray-500">Controla tu alimentación y alcanza tus objetivos</p>
+          <p className="text-gray-500">Tu plan de alimentación personalizado</p>
         </div>
-        <button
-          onClick={handleGenerateDiet}
-          disabled={generatingDiet}
-          className="btn btn-primary"
-        >
-          <Sparkles className="w-5 h-5" />
-          {generatingDiet ? 'Generando...' : 'Generar dieta IA'}
-        </button>
       </div>
 
       {/* Tabs */}
@@ -116,6 +109,141 @@ export function NutritionPage() {
           </button>
         ))}
       </div>
+
+      {/* Plan Tab - Mi dieta generada por IA */}
+      {activeTab === 'plan' && (
+        <div>
+          {dietPlan && dietPlan.days?.length > 0 ? (
+            <>
+              {/* Plan Info */}
+              <div className="card mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{dietPlan.name}</h3>
+                    <p className="text-sm text-gray-500">{dietPlan.description}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-primary-600">{dietPlan.daily_calories}</p>
+                    <p className="text-xs text-gray-500">kcal/día</p>
+                  </div>
+                </div>
+                
+                {/* Macros */}
+                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t">
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-blue-600">{dietPlan.macros?.protein_grams}g</p>
+                    <p className="text-xs text-gray-500">Proteína</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-yellow-600">{dietPlan.macros?.carbs_grams}g</p>
+                    <p className="text-xs text-gray-500">Carbohidratos</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-red-600">{dietPlan.macros?.fat_grams}g</p>
+                    <p className="text-xs text-gray-500">Grasas</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Day Selector */}
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {dayNames.map((day, index) => (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDay(index)}
+                    className={`px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
+                      selectedDay === index
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {day.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Day Meals */}
+              <div className="space-y-4">
+                {dietPlan.days?.[selectedDay]?.meals?.map((meal, index) => (
+                  <div key={index} className="card">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          meal.meal_type === 'breakfast' ? 'bg-orange-100' :
+                          meal.meal_type === 'lunch' ? 'bg-green-100' :
+                          meal.meal_type === 'dinner' ? 'bg-purple-100' :
+                          'bg-blue-100'
+                        }`}>
+                          <Utensils className={`w-5 h-5 ${
+                            meal.meal_type === 'breakfast' ? 'text-orange-600' :
+                            meal.meal_type === 'lunch' ? 'text-green-600' :
+                            meal.meal_type === 'dinner' ? 'text-purple-600' :
+                            'text-blue-600'
+                          }`} />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-gray-900">{meal.name}</h4>
+                          <p className="text-xs text-gray-500">{meal.time_suggestion}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">{meal.calories} kcal</p>
+                        <p className="text-xs text-gray-500">P:{meal.protein}g C:{meal.carbs}g G:{meal.fat}g</p>
+                      </div>
+                    </div>
+
+                    {/* Foods */}
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                      {meal.foods?.map((food, i) => (
+                        <div key={i} className="flex justify-between text-sm">
+                          <span className="text-gray-700">{food.name}</span>
+                          <span className="text-gray-500">{food.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Recipe */}
+                    {meal.recipe && (
+                      <details className="mt-3">
+                        <summary className="text-sm text-primary-600 cursor-pointer hover:text-primary-700">
+                          Ver receta
+                        </summary>
+                        <div className="mt-3 p-3 bg-primary-50 rounded-lg">
+                          <p className="text-xs text-gray-500 mb-2">Ingredientes:</p>
+                          <ul className="text-sm text-gray-700 mb-3 list-disc list-inside">
+                            {meal.recipe.ingredients?.map((ing, i) => (
+                              <li key={i}>{ing}</li>
+                            ))}
+                          </ul>
+                          <p className="text-xs text-gray-500 mb-2">Preparación:</p>
+                          <ol className="text-sm text-gray-700 list-decimal list-inside">
+                            {meal.recipe.instructions?.map((step, i) => (
+                              <li key={i} className="mb-1">{step}</li>
+                            ))}
+                          </ol>
+                          <p className="text-xs text-gray-500 mt-2">⏱️ {meal.recipe.prep_time} min</p>
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                ))}
+
+                {(!dietPlan.days?.[selectedDay]?.meals || dietPlan.days[selectedDay].meals.length === 0) && (
+                  <div className="card text-center py-8">
+                    <p className="text-gray-500">No hay comidas programadas para este día</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <EmptyState
+              icon={Sparkles}
+              title="Plan de dieta no generado"
+              description="Completa el onboarding para que la IA genere tu plan de alimentación personalizado"
+            />
+          )}
+        </div>
+      )}
 
       {/* Diary Tab */}
       {activeTab === 'diary' && (
@@ -157,7 +285,6 @@ export function NutritionPage() {
               </span>
             </div>
             
-            {/* Progress bar */}
             <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-4">
               <div 
                 className={`h-full rounded-full transition-all ${
@@ -169,7 +296,6 @@ export function NutritionPage() {
               />
             </div>
 
-            {/* Macros */}
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-blue-100 flex items-center justify-center">
@@ -248,89 +374,7 @@ export function NutritionPage() {
       {activeTab === 'recipes' && <RecipesSection />}
 
       {/* Shopping List Tab */}
-      {activeTab === 'shopping' && <ShoppingListSection />}
-
-      {/* Diet Plan Tab */}
-      {activeTab === 'diet' && (
-        <div>
-          {dietPlan ? (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{dietPlan.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {dietPlan.daily_calories} kcal/día
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleGenerateDiet}
-                    disabled={generatingDiet}
-                    className="btn btn-outline text-sm"
-                  >
-                    {generatingDiet ? 'Generando...' : 'Regenerar'}
-                  </button>
-                </div>
-              </div>
-
-              {dietPlan.meals.map((meal, i) => (
-                <div key={i} className="card">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                      <Utensils className="w-5 h-5 text-primary-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900 capitalize">
-                        {meal.meal_type === 'breakfast' && 'Desayuno'}
-                        {meal.meal_type === 'lunch' && 'Comida'}
-                        {meal.meal_type === 'dinner' && 'Cena'}
-                        {meal.meal_type === 'snack' && 'Snack'}
-                      </h4>
-                      <p className="text-xs text-gray-500">{meal.target_calories} kcal</p>
-                    </div>
-                  </div>
-
-                  {meal.recipes.map((recipe, j) => (
-                    <div key={j} className="p-4 bg-gray-50 rounded-xl mb-3 last:mb-0">
-                      <h5 className="font-medium text-gray-900 mb-2">{recipe.name}</h5>
-                      <p className="text-sm text-gray-500 mb-3">{recipe.description}</p>
-                      
-                      <div className="grid grid-cols-4 gap-2 text-center text-sm">
-                        <div className="p-2 bg-white rounded-lg">
-                          <p className="font-semibold text-gray-900">{recipe.calories_per_serving}</p>
-                          <p className="text-xs text-gray-500">kcal</p>
-                        </div>
-                        <div className="p-2 bg-white rounded-lg">
-                          <p className="font-semibold text-blue-600">{recipe.protein_per_serving}g</p>
-                          <p className="text-xs text-gray-500">Prot</p>
-                        </div>
-                        <div className="p-2 bg-white rounded-lg">
-                          <p className="font-semibold text-yellow-600">{recipe.carbs_per_serving}g</p>
-                          <p className="text-xs text-gray-500">Carb</p>
-                        </div>
-                        <div className="p-2 bg-white rounded-lg">
-                          <p className="font-semibold text-red-600">{recipe.fat_per_serving}g</p>
-                          <p className="text-xs text-gray-500">Grasa</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={Sparkles}
-              title="Sin plan de dieta"
-              description="Genera un plan de dieta personalizado con IA basado en tus objetivos"
-              action={{
-                label: "Generar dieta",
-                onClick: handleGenerateDiet
-              }}
-            />
-          )}
-        </div>
-      )}
+      {activeTab === 'shopping' && <ShoppingListSection plan={generatedPlan} />}
 
       {/* Meal Form Modal */}
       <Modal

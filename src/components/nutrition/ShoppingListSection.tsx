@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Check, 
   ShoppingCart, 
-  Sparkles,
   Trash2,
   Apple,
   Beef,
@@ -10,9 +9,8 @@ import {
   Wheat,
   Package
 } from 'lucide-react';
-import { useNutritionStore } from '../../stores/nutritionStore';
-import { generateShoppingList } from '../../lib/openai';
 import { EmptyState } from '../ui/EmptyState';
+import type { GeneratedPlan, ShoppingListItem } from '../../types';
 
 const CATEGORY_ICONS = {
   produce: Apple,
@@ -38,35 +36,18 @@ const CATEGORY_COLORS = {
   other: 'bg-gray-100 text-gray-600'
 };
 
-export function ShoppingListSection() {
-  const { 
-    shoppingList, 
-    dietPlan
-  } = useNutritionStore();
-  
-  const [generating, setGenerating] = useState(false);
-  const [localList, setLocalList] = useState(shoppingList);
+interface Props {
+  plan?: GeneratedPlan | null;
+}
 
-  const handleGenerateList = async () => {
-    if (!dietPlan) return;
-    
-    setGenerating(true);
-    
-    // Get all recipes from diet plan
-    const allRecipes = dietPlan.meals.flatMap(m => m.recipes);
-    const items = await generateShoppingList(
-      allRecipes.map(r => ({ name: r.name, servings: r.servings }))
-    );
-    
-    const formattedItems = items.map(item => ({
-      ...item,
-      category: item.category as 'produce' | 'meat' | 'dairy' | 'grains' | 'other',
-      checked: false
-    }));
-    
-    setLocalList(formattedItems);
-    setGenerating(false);
-  };
+export function ShoppingListSection({ plan }: Props) {
+  const [localList, setLocalList] = useState<ShoppingListItem[]>([]);
+
+  useEffect(() => {
+    if (plan?.shopping_list && plan.shopping_list.length > 0) {
+      setLocalList(plan.shopping_list);
+    }
+  }, [plan]);
 
   const toggleItem = (index: number) => {
     setLocalList(prev => prev.map((item, i) => 
@@ -74,16 +55,17 @@ export function ShoppingListSection() {
     ));
   };
 
-  const clearList = () => {
-    setLocalList([]);
+  const clearChecked = () => {
+    setLocalList(prev => prev.map(item => ({ ...item, checked: false })));
   };
 
   // Group items by category
   const groupedItems = localList.reduce((acc, item, index) => {
-    if (!acc[item.category]) acc[item.category] = [];
-    acc[item.category].push({ ...item, index });
+    const cat = item.category || 'other';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push({ ...item, index });
     return acc;
-  }, {} as Record<string, (typeof localList[0] & { index: number })[]>);
+  }, {} as Record<string, (ShoppingListItem & { index: number })[]>);
 
   const completedCount = localList.filter(i => i.checked).length;
   const totalCount = localList.length;
@@ -93,11 +75,7 @@ export function ShoppingListSection() {
       <EmptyState
         icon={ShoppingCart}
         title="Lista de compra vacía"
-        description="Genera una lista de compra automática basada en tu plan de dieta"
-        action={{
-          label: generating ? "Generando..." : "Generar lista",
-          onClick: handleGenerateList
-        }}
+        description="Completa el onboarding para que la IA genere tu lista de compra semanal automáticamente"
       />
     );
   }
@@ -107,28 +85,20 @@ export function ShoppingListSection() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="font-semibold text-gray-900">Lista de la compra</h3>
+          <h3 className="font-semibold text-gray-900">Lista de la compra semanal</h3>
           <p className="text-sm text-gray-500">
             {completedCount} de {totalCount} items completados
           </p>
         </div>
-        <div className="flex gap-2">
+        {completedCount > 0 && (
           <button
-            onClick={handleGenerateList}
-            disabled={generating}
-            className="btn btn-outline text-sm"
-          >
-            <Sparkles className="w-4 h-4" />
-            {generating ? 'Generando...' : 'Regenerar'}
-          </button>
-          <button
-            onClick={clearList}
-            className="btn btn-secondary text-sm text-red-600"
+            onClick={clearChecked}
+            className="btn btn-secondary text-sm"
           >
             <Trash2 className="w-4 h-4" />
-            Limpiar
+            Desmarcar todo
           </button>
-        </div>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -142,9 +112,9 @@ export function ShoppingListSection() {
       {/* Items by category */}
       <div className="space-y-6">
         {Object.entries(groupedItems).map(([category, items]) => {
-          const Icon = CATEGORY_ICONS[category as keyof typeof CATEGORY_ICONS];
-          const label = CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS];
-          const colorClass = CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS];
+          const Icon = CATEGORY_ICONS[category as keyof typeof CATEGORY_ICONS] || Package;
+          const label = CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] || 'Otros';
+          const colorClass = CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] || 'bg-gray-100 text-gray-600';
           
           return (
             <div key={category}>
