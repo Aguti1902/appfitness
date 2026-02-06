@@ -8,10 +8,14 @@ import {
   LogOut,
   ChevronRight,
   Save,
-  Check
+  Check,
+  Sparkles,
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { requestNotificationPermission } from '../../lib/notifications';
+import { generateCompletePlan } from '../../lib/openai';
 import type { UserGoals, TrainingType } from '../../types';
 
 export function SettingsPage() {
@@ -20,6 +24,8 @@ export function SettingsPage() {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateSuccess, setRegenerateSuccess] = useState(false);
 
   // Form states
   const [name, setName] = useState(user?.name || '');
@@ -61,6 +67,7 @@ export function SettingsPage() {
   const sections = [
     { id: 'profile', label: 'Perfil', icon: User },
     { id: 'goals', label: 'Objetivos', icon: Target },
+    { id: 'ai', label: 'Plan IA', icon: Sparkles },
     { id: 'notifications', label: 'Notificaciones', icon: Bell },
     { id: 'privacy', label: 'Privacidad', icon: Shield },
     { id: 'help', label: 'Ayuda', icon: HelpCircle },
@@ -72,6 +79,39 @@ export function SettingsPage() {
         ? prev.filter(t => t !== type)
         : [...prev, type]
     );
+  };
+
+  const handleRegeneratePlan = async () => {
+    setIsRegenerating(true);
+    setRegenerateSuccess(false);
+    
+    try {
+      const userGoals = user?.goals || goals;
+      const userTrainingTypes = user?.training_types || trainingTypes;
+      const profileData = user?.profile_data;
+      
+      console.log('Regenerating plan with:', { userGoals, userTrainingTypes, profileData });
+      
+      const newPlan = await generateCompletePlan(userGoals, userTrainingTypes, profileData);
+      
+      // Guardar en localStorage
+      localStorage.setItem('fitapp-generated-plan', JSON.stringify(newPlan));
+      
+      setRegenerateSuccess(true);
+      setTimeout(() => setRegenerateSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error regenerating plan:', error);
+      alert('Error al regenerar el plan. Por favor, inténtalo de nuevo.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleClearPlan = () => {
+    if (confirm('¿Seguro que quieres borrar tu plan actual? Tendrás que regenerarlo.')) {
+      localStorage.removeItem('fitapp-generated-plan');
+      alert('Plan eliminado. Ve a "Regenerar plan" para crear uno nuevo.');
+    }
   };
 
   return (
@@ -295,6 +335,110 @@ export function SettingsPage() {
                   {saved ? <Check className="w-5 h-5" /> : <Save className="w-5 h-5" />}
                   {isSaving ? 'Guardando...' : saved ? 'Guardado' : 'Guardar cambios'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* AI Plan Section */}
+          {activeSection === 'ai' && (
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Plan generado por IA</h2>
+              
+              <div className="space-y-4">
+                {/* Info box */}
+                <div className="p-4 bg-primary-50 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-primary-900">Tu plan personalizado</p>
+                      <p className="text-sm text-primary-700 mt-1">
+                        La IA genera tu rutina de entrenamiento, plan de comidas y lista de la compra 
+                        basándose en tus objetivos, preferencias y datos personales.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Regenerate button */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-medium text-gray-900">Regenerar plan completo</p>
+                      <p className="text-sm text-gray-500">Crea un nuevo plan con tus datos actuales</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleRegeneratePlan}
+                    disabled={isRegenerating}
+                    className={`w-full btn ${regenerateSuccess ? 'btn-success' : 'btn-primary'}`}
+                  >
+                    {isRegenerating ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        Generando plan...
+                      </>
+                    ) : regenerateSuccess ? (
+                      <>
+                        <Check className="w-5 h-5" />
+                        ¡Plan regenerado!
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-5 h-5" />
+                        Regenerar plan con IA
+                      </>
+                    )}
+                  </button>
+                  {regenerateSuccess && (
+                    <p className="text-center text-sm text-green-600 mt-2">
+                      Ve a Entrenamientos o Nutrición para ver tu nuevo plan
+                    </p>
+                  )}
+                </div>
+
+                {/* Plan includes */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <p className="font-medium text-gray-900 mb-3">El plan incluye:</p>
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      Rutina de entrenamiento semanal (7 días)
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      Ejercicios con series, repeticiones y peso recomendado
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      Plan de alimentación con recetas
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      Macros y calorías calculados
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      Lista de la compra semanal
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Clear data */}
+                <div className="p-4 border border-red-200 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">Borrar plan actual</p>
+                      <p className="text-sm text-gray-500">Elimina el plan para empezar de cero</p>
+                    </div>
+                    <button
+                      onClick={handleClearPlan}
+                      className="btn btn-secondary text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Borrar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
