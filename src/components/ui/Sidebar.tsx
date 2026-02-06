@@ -11,7 +11,8 @@ import {
   Settings,
   Menu,
   X,
-  Target
+  Target,
+  Flame
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/workouts', icon: Dumbbell, label: 'Entrenamientos' },
   { to: '/nutrition', icon: Utensils, label: 'Nutrición' },
   { to: '/goals', icon: Target, label: 'Objetivos' },
+  { to: '/crossfit', icon: Flame, label: 'CrossFit WODs' },
   { to: '/progress', icon: TrendingUp, label: 'Progreso' },
   { to: '/social', icon: Users, label: 'Amigos' },
   { to: '/schedule', icon: Calendar, label: 'Horarios' },

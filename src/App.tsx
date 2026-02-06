@@ -22,6 +22,7 @@ import { SchedulePage } from './components/schedule/SchedulePage';
 import { AICoachPage } from './components/ai/AICoachPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { GoalsPage } from './components/goals/GoalsPage';
+import { CrossfitWODsPage } from './components/crossfit/CrossfitWODsPage';
 
 function AppContent() {
   const { isAuthenticated, setUser } = useAuthStore();
@@ -170,6 +171,7 @@ function AppContent() {
         <Route path="/schedule" element={<SchedulePage />} />
         <Route path="/ai-coach" element={<AICoachPage />} />
         <Route path="/goals" element={<GoalsPage />} />
+        <Route path="/crossfit" element={<CrossfitWODsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

@@ -101,12 +101,15 @@ export function OnboardingPage() {
   const [preferredWorkoutTime, setPreferredWorkoutTime] = useState<'morning' | 'afternoon' | 'evening' | 'flexible'>('flexible');
   const [workoutDuration, setWorkoutDuration] = useState('60');
   
-  // Step 4: Horario laboral
+  // Step 4: Frecuencia por deporte
+  const [sportsFrequency, setSportsFrequency] = useState<Record<string, { days: number; duration: number; type?: 'class' | 'open' }>>({});
+  
+  // Step 5: Horario laboral
   const [workStartTime, setWorkStartTime] = useState('09:00');
   const [workEndTime, setWorkEndTime] = useState('18:00');
   const [workDays, setWorkDays] = useState<number[]>([1, 2, 3, 4, 5]); // L-V
   
-  // Step 5: Alimentación
+  // Step 6: Alimentación
   const [dietType, setDietType] = useState<'omnivore' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo'>('omnivore');
   const [allergies, setAllergies] = useState<string[]>([]);
   const [customAllergy, setCustomAllergy] = useState('');
@@ -114,11 +117,11 @@ export function OnboardingPage() {
   const [favoriteFoods, setFavoriteFoods] = useState('');
   const [dislikedFoods, setDislikedFoods] = useState('');
   
-  // Step 6: Lesiones
+  // Step 7: Lesiones
   const [injuries, setInjuries] = useState<string[]>([]);
   const [customInjury, setCustomInjury] = useState('');
   
-  // Step 7: Fotos (opcional)
+  // Step 8: Fotos (opcional)
   const [photos, setPhotos] = useState<{ front?: string; side?: string; back?: string }>({});
 
   const { user, isLoading: authLoading } = useAuthStore();
@@ -233,6 +236,7 @@ export function OnboardingPage() {
         : undefined,
       fitness_experience: fitnessExperience,
       initial_photos: Object.keys(photos).length > 0 ? photos : undefined,
+      sports_frequency: Object.keys(sportsFrequency).length > 0 ? sportsFrequency : undefined,
     };
 
     console.log('Goals:', goals);
@@ -314,7 +318,7 @@ export function OnboardingPage() {
     navigate('/ai-processing');
   };
 
-  const totalSteps = 7;
+  const totalSteps = 8;
   const DAYS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 
   // Mostrar loading mientras se carga la autenticación
@@ -629,8 +633,133 @@ export function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 4: Horario laboral */}
-          {step === 4 && (
+          {/* Step 4: Frecuencia por deporte */}
+          {step === 4 && trainingTypes.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-primary-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Frecuencia de entrenamiento</h2>
+                  <p className="text-sm text-gray-500">¿Cuántos días practicas cada deporte?</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {trainingTypes.map((sport) => {
+                  const sportLabel = TRAINING_TYPES.find(t => t.id === sport)?.label || sport;
+                  const sportEmoji = TRAINING_TYPES.find(t => t.id === sport)?.emoji || '🏃';
+                  const freq = sportsFrequency[sport] || { days: 3, duration: 60 };
+                  
+                  return (
+                    <div key={sport} className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xl">{sportEmoji}</span>
+                        <span className="font-semibold text-gray-900">{sportLabel}</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">Días por semana</label>
+                          <div className="flex gap-1">
+                            {[1,2,3,4,5,6,7].map(d => (
+                              <button
+                                key={d}
+                                onClick={() => setSportsFrequency(prev => ({
+                                  ...prev,
+                                  [sport]: { ...freq, days: d }
+                                }))}
+                                className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
+                                  freq.days === d
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-white border border-gray-200 text-gray-600 hover:border-primary-300'
+                                }`}
+                              >
+                                {d}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">Duración (min)</label>
+                          <select
+                            value={freq.duration}
+                            onChange={(e) => setSportsFrequency(prev => ({
+                              ...prev,
+                              [sport]: { ...freq, duration: parseInt(e.target.value) }
+                            }))}
+                            className="input text-sm"
+                          >
+                            <option value="30">30 min</option>
+                            <option value="45">45 min</option>
+                            <option value="60">60 min</option>
+                            <option value="75">75 min</option>
+                            <option value="90">90 min</option>
+                            <option value="120">120 min</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      {/* CrossFit específico: Clase u Open */}
+                      {sport === 'crossfit' && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <label className="block text-sm text-gray-600 mb-2">¿Cómo entrenas CrossFit?</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setSportsFrequency(prev => ({
+                                ...prev,
+                                [sport]: { ...freq, type: 'class' }
+                              }))}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                                freq.type === 'class'
+                                  ? 'border-primary-600 bg-primary-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <p className="font-medium text-sm">📋 Clase dirigida</p>
+                              <p className="text-xs text-gray-500">El WOD lo pone el box</p>
+                            </button>
+                            <button
+                              onClick={() => setSportsFrequency(prev => ({
+                                ...prev,
+                                [sport]: { ...freq, type: 'open' }
+                              }))}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                                freq.type === 'open'
+                                  ? 'border-primary-600 bg-primary-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <p className="font-medium text-sm">🔓 Open Box</p>
+                              <p className="text-xs text-gray-500">Tú eliges el entreno</p>
+                            </button>
+                          </div>
+                          {freq.type === 'class' && (
+                            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                              <p className="text-xs text-blue-700">
+                                💡 Podrás añadir los WODs de tu box desde la sección de CrossFit para que la IA adapte tu plan.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                <div className="bg-green-50 rounded-lg p-4">
+                  <p className="text-sm text-green-800">
+                    <strong>Total semanal:</strong> {Object.values(sportsFrequency).reduce((acc, s) => acc + (s.days || 0), 0)} días de entrenamiento
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Horario laboral */}
+          {step === 5 && (
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -698,8 +827,8 @@ export function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 5: Alimentación */}
-          {step === 5 && (
+          {/* Step 6: Alimentación */}
+          {step === 6 && (
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -837,8 +966,8 @@ export function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 6: Lesiones */}
-          {step === 6 && (
+          {/* Step 7: Lesiones */}
+          {step === 7 && (
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -916,8 +1045,8 @@ export function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 7: Fotos */}
-          {step === 7 && (
+          {/* Step 8: Fotos */}
+          {step === 8 && (
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
