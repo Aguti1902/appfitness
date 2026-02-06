@@ -169,12 +169,15 @@ export const useAuthStore = create<AuthState>()(
         } catch (e) {
           console.error('SignOut error:', e);
         }
-        // Limpiar localStorage manualmente
+        // Limpiar SOLO datos de sesión local, NO los datos del plan generado
+        // (los datos del plan se deben mantener vinculados al usuario en Supabase)
         localStorage.removeItem('supabase-auth');
         localStorage.removeItem('fitapp-auth');
+        // NO borrar fitapp-generated-plan ni fitapp-personal-records
+        // ya que estos se cargarán de nuevo cuando el usuario inicie sesión
         // Limpiar estado
         set({ user: null, isAuthenticated: false, isLoading: false });
-        console.log('Logged out');
+        console.log('Logged out - session cleared');
       },
 
       updateProfile: async (data) => {

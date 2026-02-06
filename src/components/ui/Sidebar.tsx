@@ -22,7 +22,7 @@ const navItems = [
   { to: '/workouts', icon: Dumbbell, label: 'Entrenamientos' },
   { to: '/nutrition', icon: Utensils, label: 'Nutrición' },
   { to: '/goals', icon: Target, label: 'Objetivos' },
-  { to: '/crossfit', icon: Flame, label: 'CrossFit WODs' },
+  { to: '/crossfit', icon: Flame, label: 'CrossFit' },
   { to: '/progress', icon: TrendingUp, label: 'Progreso' },
   { to: '/social', icon: Users, label: 'Amigos' },
   { to: '/schedule', icon: Calendar, label: 'Horarios' },
@@ -47,12 +47,12 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
+      {/* Mobile menu button - repositioned to not overlap content */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md md:hidden"
+        className="fixed top-2 left-2 z-50 p-1.5 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm md:hidden"
       >
-        <Menu className="w-6 h-6 text-gray-700" />
+        <Menu className="w-5 h-5 text-gray-700" />
       </button>
 
       {/* Overlay */}
@@ -147,23 +147,23 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Bottom navigation for mobile */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 md:hidden">
-        <div className="flex justify-around items-center py-2">
+      {/* Bottom navigation for mobile - compact design */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 md:hidden safe-area-inset-bottom">
+        <div className="flex justify-around items-center py-1 px-1">
           {navItems.slice(0, 5).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg ${
+                `flex flex-col items-center gap-0.5 py-1.5 px-2 min-w-0 ${
                   isActive
                     ? 'text-primary-600'
-                    : 'text-gray-500'
+                    : 'text-gray-400'
                 }`
               }
             >
-              <item.icon className="w-5 h-5" />
-              <span className="text-xs">{item.label}</span>
+              <item.icon className="w-5 h-5 flex-shrink-0" />
+              <span className="text-[10px] truncate max-w-[60px]">{item.label}</span>
             </NavLink>
           ))}
         </div>
