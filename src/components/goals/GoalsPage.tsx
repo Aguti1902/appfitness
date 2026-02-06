@@ -10,10 +10,8 @@ import {
   CheckCircle,
   Clock,
   ChevronRight,
-  X,
   Trash2
 } from 'lucide-react';
-import { useAuthStore } from '../../stores/authStore';
 import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
 
@@ -41,7 +39,6 @@ const CATEGORY_OPTIONS = [
 ];
 
 export function GoalsPage() {
-  const { user } = useAuthStore();
   const [goals, setGoals] = useState<UserGoal[]>([]);
   const [showNewGoal, setShowNewGoal] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<UserGoal | null>(null);
