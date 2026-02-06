@@ -233,26 +233,23 @@ export function WorkoutsPage() {
                   const dayData = workoutPlan.days?.[index];
                   const isRestDay = dayData?.is_rest_day;
                   const isToday = index === new Date().getDay();
-                  const workoutType = dayData ? getWorkoutType(dayData) : 'rest';
+                  const isSelected = selectedDay === index;
                   
                   return (
                     <button
                       key={day}
                       onClick={() => setSelectedDay(index)}
-                      className={`flex flex-col items-center px-4 py-2 rounded-xl transition-all min-w-[60px] ${
-                        selectedDay === index
+                      className={`flex flex-col items-center justify-center px-4 py-3 rounded-xl transition-all min-w-[55px] ${
+                        isSelected
                           ? 'bg-primary-600 text-white shadow-lg'
                           : isRestDay 
                             ? 'bg-gray-100 text-gray-400' 
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
-                      <span className="text-xs font-medium">{day}</span>
-                      {!isRestDay && selectedDay !== index && (
-                        <span className="text-lg mt-1">{MUSCLE_GROUPS[workoutType].emoji}</span>
-                      )}
+                      <span className={`text-sm font-semibold ${isSelected ? 'text-white' : ''}`}>{day}</span>
                       {isToday && (
-                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1"></span>
+                        <span className={`w-1.5 h-1.5 rounded-full mt-1 ${isSelected ? 'bg-white' : 'bg-green-500'}`}></span>
                       )}
                     </button>
                   );

@@ -15,9 +15,12 @@ import type {
 
 const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
 
+// NOTA DE SEGURIDAD: En producción, las llamadas a OpenAI deberían
+// hacerse desde un backend seguro, no desde el cliente.
+// dangerouslyAllowBrowser solo debe usarse en desarrollo/demo.
 const openai = apiKey ? new OpenAI({
   apiKey,
-  dangerouslyAllowBrowser: true // Solo para desarrollo, en producción usar backend
+  dangerouslyAllowBrowser: true
 }) : null;
 
 // Modo demo cuando no hay API key

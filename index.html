@@ -5,6 +5,10 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
+    <!-- Preconnect para cargar más rápido -->
+    <link rel="preconnect" href="https://lrvpdvztnxqoyerqvfri.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://lrvpdvztnxqoyerqvfri.supabase.co" />
+    
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#22c55e" />
     <meta name="description" content="FitApp - Tu compañero fitness con IA para entrenamientos personalizados, nutrición y seguimiento de progreso" />
@@ -19,6 +23,29 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     
     <title>FitApp - Tu compañero fitness</title>
+    
+    <!-- Critical CSS inline para First Paint rápido -->
+    <style>
+      #root:empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: #f9fafb;
+      }
+      #root:empty::after {
+        content: '';
+        width: 32px;
+        height: 32px;
+        border: 3px solid #dcfce7;
+        border-top-color: #22c55e;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
