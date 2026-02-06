@@ -316,7 +316,7 @@ export function SettingsPage() {
                     Tipos de entrenamiento
                   </label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {(['gym', 'crossfit', 'running', 'swimming', 'yoga', 'other'] as TrainingType[]).map((type) => (
+                    {(['gym', 'crossfit', 'hyrox', 'hybrid', 'running'] as TrainingType[]).map((type) => (
                       <button
                         key={type}
                         onClick={() => toggleTrainingType(type)}
@@ -328,10 +328,9 @@ export function SettingsPage() {
                       >
                         {type === 'gym' && 'Gimnasio'}
                         {type === 'crossfit' && 'CrossFit'}
+                        {type === 'hyrox' && 'Hyrox'}
+                        {type === 'hybrid' && 'Hybrid'}
                         {type === 'running' && 'Running'}
-                        {type === 'swimming' && 'Natación'}
-                        {type === 'yoga' && 'Yoga'}
-                        {type === 'other' && 'Otro'}
                       </button>
                     ))}
                   </div>

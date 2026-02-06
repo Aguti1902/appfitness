@@ -6,9 +6,9 @@ import {
   Clock,
   Sparkles,
   CheckCircle,
-  Edit3,
-  LucideIcon
+  Edit3
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { WeeklyCrossfitWODs } from '../../types';
 
 const DAYS_OF_WEEK = [
