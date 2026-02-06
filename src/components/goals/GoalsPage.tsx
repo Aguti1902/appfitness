@@ -354,12 +354,13 @@ export function GoalsPage() {
                   value={newGoal.current_value}
                   onChange={(e) => setNewGoal(prev => ({ ...prev, current_value: e.target.value }))}
                   placeholder="0"
-                  className="input flex-1"
+                  className="input flex-1 text-gray-900"
+                  style={{ colorScheme: 'light' }}
                 />
                 <select
                   value={newGoal.unit}
                   onChange={(e) => setNewGoal(prev => ({ ...prev, unit: e.target.value }))}
-                  className="input w-20"
+                  className="input w-24 text-gray-900"
                 >
                   <option value="kg">kg</option>
                   <option value="km">km</option>
@@ -380,9 +381,10 @@ export function GoalsPage() {
                   value={newGoal.target_value}
                   onChange={(e) => setNewGoal(prev => ({ ...prev, target_value: e.target.value }))}
                   placeholder="0"
-                  className="input flex-1"
+                  className="input flex-1 text-gray-900"
+                  style={{ colorScheme: 'light' }}
                 />
-                <span className="input w-20 flex items-center justify-center bg-gray-50">
+                <span className="input w-24 flex items-center justify-center bg-gray-100 text-gray-700 font-medium">
                   {newGoal.unit}
                 </span>
               </div>
